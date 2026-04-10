@@ -106,10 +106,16 @@ async def analyze_meal(
     except httpx.RequestError:
         raise HTTPException(status_code=503, detail="Service utilisateur indisponible.")
 
-    user_id: int = user_profile["id"]
+    try:
+        user_id: int = user_profile["id"]
+    except KeyError:
+        raise HTTPException(status_code=502, detail="Réponse inattendue du service utilisateur (champ 'id' manquant).")
 
     # --- Classification (CPU-bound → thread pool) ---
-    predictions = await asyncio.to_thread(classify_image, image_bytes)
+    try:
+        predictions = await asyncio.to_thread(classify_image, image_bytes)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Image invalide ou corrompue.")
     if not predictions:
         raise HTTPException(status_code=422, detail="Aucun aliment détecté avec un score suffisant.")
 
