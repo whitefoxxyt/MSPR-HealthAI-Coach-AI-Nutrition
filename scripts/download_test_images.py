@@ -42,7 +42,7 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("Chargement du dataset Food-101 (streaming)...")
-    ds = load_dataset("food101", split="validation", streaming=True, trust_remote_code=True)
+    ds = load_dataset("food101", split="validation", streaming=True)
 
     targets = set(CLASSES[: args.n])
     saved: dict[str, bool] = {}
@@ -55,7 +55,20 @@ def main() -> None:
             continue
 
         out_path = args.output_dir / f"{class_name}.jpg"
-        sample["image"].convert("RGB").save(out_path, "JPEG")
+        try:
+            img = sample["image"]
+            # Reconstruire depuis les bytes bruts pour contourner les EXIF corrompus
+            from io import BytesIO
+            buf = BytesIO()
+            img.save(buf, format="JPEG")
+            buf.seek(0)
+            from PIL import Image
+            clean = Image.open(buf).convert("RGB")
+            clean.save(out_path, "JPEG")
+        except Exception as e:
+            print(f"  {class_name} ignoré (image corrompue : {e}), passage au suivant...")
+            continue
+
         saved[class_name] = True
         print(f"  {class_name}.jpg sauvegardé")
 
