@@ -23,7 +23,7 @@ services:
 
 networks:
   mspr_data_network:
-    external: true
+    external: true  # créé par le docker-compose.yml racine (MSPR/)
   internal:
     driver: bridge
 
