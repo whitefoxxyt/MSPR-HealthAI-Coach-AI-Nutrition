@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import health
+from app.routers import health, meal_analysis
 
 app = FastAPI(
     title="MSPR HealthAI Coach — AI Nutrition",
@@ -9,3 +9,4 @@ app = FastAPI(
 )
 
 app.include_router(health.router)
+app.include_router(meal_analysis.router)
