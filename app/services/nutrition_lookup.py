@@ -28,7 +28,7 @@ def lookup_nutrition(
         text(
             "SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
             "FROM nutrition_entries "
-            "WHERE LOWER(food_name) = LOWER(:name) "
+            "WHERE user_id IS NULL AND LOWER(food_name) = LOWER(:name) "
             "LIMIT 1"
         ),
         {"name": normalized},
@@ -37,19 +37,20 @@ def lookup_nutrition(
     if row is None:
         # 2. Fuzzy match : tous les mots-clés présents dans food_name
         keywords = _label_to_keywords(label)
-        conditions = " AND ".join(
-            f"LOWER(food_name) LIKE :kw{i}" for i in range(len(keywords))
-        )
-        params = {f"kw{i}": f"%{kw}%" for i, kw in enumerate(keywords)}
-        row = db.execute(
-            text(
-                f"SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
-                f"FROM nutrition_entries "
-                f"WHERE {conditions} "
-                f"LIMIT 1"
-            ),
-            params,
-        ).fetchone()
+        if keywords:
+            conditions = " AND ".join(
+                f"LOWER(food_name) LIKE :kw{i}" for i in range(len(keywords))
+            )
+            params = {f"kw{i}": f"%{kw}%" for i, kw in enumerate(keywords)}
+            row = db.execute(
+                text(
+                    f"SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
+                    f"FROM nutrition_entries "
+                    f"WHERE user_id IS NULL AND {conditions} "
+                    f"LIMIT 1"
+                ),
+                params,
+            ).fetchone()
 
     if row is None:
         return None
