@@ -1,5 +1,23 @@
 # Benchmark — Sélection du modèle de classification alimentaire
 
+## Reproduire le benchmark
+
+Prérequis : le container `mspr-ai-nutrition` doit être démarré.
+
+```bash
+./scripts/run_benchmark.sh
+```
+
+Le script :
+1. Télécharge 15 images de test depuis le dataset **Food-101** (HuggingFace)
+2. Exécute les deux modèles candidats sur ces images
+3. Affiche les métriques en temps réel
+4. Exporte les résultats complets dans `docs/benchmark_results.json`
+
+Durée estimée : 5-10 min (téléchargement des modèles au premier lancement).
+
+---
+
 ## Objectif
 
 Choisir le modèle HuggingFace optimal pour identifier les aliments présents
