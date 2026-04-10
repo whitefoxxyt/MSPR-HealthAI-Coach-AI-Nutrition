@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
@@ -18,7 +18,7 @@ class MealAnalysis(Base):
     detected_foods = Column(JSONB, nullable=False, server_default=text("'[]'"))
     macros = Column(JSONB, nullable=False, server_default=text("'{}'"))
     confidence_scores = Column(JSONB, nullable=False, server_default=text("'{}'"))
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 class MealPlan(Base):
@@ -29,7 +29,7 @@ class MealPlan(Base):
     plan = Column(JSONB, nullable=False, server_default=text("'{}'"))
     objective = Column(String(100))
     constraints = Column(JSONB, nullable=False, server_default=text("'{}'"))
-    generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    generated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 class NutritionGoal(Base):
