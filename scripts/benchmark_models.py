@@ -71,7 +71,7 @@ def benchmark_model(model_id: str, images: list[tuple[str, Image.Image]]) -> dic
 
         top1_label = results[0]["label"].lower().replace(" ", "_")
         ground = GROUND_TRUTH.get(filename, "").lower()
-        correct = ground and ground in top1_label
+        correct = bool(ground) and ground in top1_label
 
         if correct:
             top1_correct += 1
@@ -97,7 +97,7 @@ def benchmark_model(model_id: str, images: list[tuple[str, Image.Image]]) -> dic
         "n_labeled": len(labeled),
         "top1_accuracy": round(top1_acc, 4) if top1_acc is not None else None,
         "avg_latency_ms": round(sum(latencies) / len(latencies), 1),
-        "p95_latency_ms": round(sorted(latencies)[int(len(latencies) * 0.95)], 1),
+        "p95_latency_ms": round(sorted(latencies)[max(0, int(len(latencies) * 0.95) - 1)], 1),
         "predictions": predictions,
     }
 
