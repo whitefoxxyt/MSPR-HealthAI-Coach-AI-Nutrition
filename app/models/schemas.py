@@ -4,7 +4,7 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 
-# ── MealAnalysis ──────────────────────────────────────────────────────────────
+# MealAnalysis
 
 class MealAnalysisResponse(BaseModel):
     id: int
@@ -18,7 +18,7 @@ class MealAnalysisResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── MealPlan ──────────────────────────────────────────────────────────────────
+# MealPlan
 
 class MealPlanRequest(BaseModel):
     user_id: int
@@ -37,7 +37,7 @@ class MealPlanResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── NutritionGoal ─────────────────────────────────────────────────────────────
+# NutritionGoal
 
 class NutritionGoalRequest(BaseModel):
     calories_target: int | None = None
