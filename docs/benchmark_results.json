@@ -1,0 +1,924 @@
+{
+  "nateraw/food": {
+    "model_id": "nateraw/food",
+    "label": "nateraw/food (ViT-base, 101 classes)",
+    "n_images": 15,
+    "n_labeled": 10,
+    "top1_accuracy": 1.0,
+    "avg_latency_ms": 181.1,
+    "p95_latency_ms": 179.6,
+    "predictions": [
+      {
+        "image": "apple_pie.jpg",
+        "ground_truth": "apple_pie",
+        "top1_pred": "apple_pie",
+        "top1_score": 0.9901,
+        "top5": [
+          {
+            "label": "apple_pie",
+            "score": 0.9901
+          },
+          {
+            "label": "bread_pudding",
+            "score": 0.003
+          },
+          {
+            "label": "waffles",
+            "score": 0.0022
+          },
+          {
+            "label": "baklava",
+            "score": 0.0008
+          },
+          {
+            "label": "french_toast",
+            "score": 0.0002
+          }
+        ],
+        "latency_ms": 261.8,
+        "correct": true
+      },
+      {
+        "image": "bibimbap.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "bibimbap",
+        "top1_score": 0.9933,
+        "top5": [
+          {
+            "label": "bibimbap",
+            "score": 0.9933
+          },
+          {
+            "label": "seaweed_salad",
+            "score": 0.0027
+          },
+          {
+            "label": "ramen",
+            "score": 0.0002
+          },
+          {
+            "label": "fried_rice",
+            "score": 0.0002
+          },
+          {
+            "label": "pad_thai",
+            "score": 0.0002
+          }
+        ],
+        "latency_ms": 169.9,
+        "correct": false
+      },
+      {
+        "image": "bruschetta.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "bruschetta",
+        "top1_score": 0.9976,
+        "top5": [
+          {
+            "label": "bruschetta",
+            "score": 0.9976
+          },
+          {
+            "label": "tuna_tartare",
+            "score": 0.0002
+          },
+          {
+            "label": "pizza",
+            "score": 0.0001
+          },
+          {
+            "label": "lobster_roll_sandwich",
+            "score": 0.0001
+          },
+          {
+            "label": "caprese_salad",
+            "score": 0.0001
+          }
+        ],
+        "latency_ms": 175.9,
+        "correct": false
+      },
+      {
+        "image": "caesar_salad.jpg",
+        "ground_truth": "caesar_salad",
+        "top1_pred": "caesar_salad",
+        "top1_score": 0.9953,
+        "top5": [
+          {
+            "label": "caesar_salad",
+            "score": 0.9953
+          },
+          {
+            "label": "greek_salad",
+            "score": 0.0005
+          },
+          {
+            "label": "lasagna",
+            "score": 0.0003
+          },
+          {
+            "label": "caprese_salad",
+            "score": 0.0002
+          },
+          {
+            "label": "beet_salad",
+            "score": 0.0001
+          }
+        ],
+        "latency_ms": 178.0,
+        "correct": true
+      },
+      {
+        "image": "chocolate_cake.jpg",
+        "ground_truth": "chocolate_cake",
+        "top1_pred": "chocolate_cake",
+        "top1_score": 0.9908,
+        "top5": [
+          {
+            "label": "chocolate_cake",
+            "score": 0.9908
+          },
+          {
+            "label": "red_velvet_cake",
+            "score": 0.0025
+          },
+          {
+            "label": "chocolate_mousse",
+            "score": 0.0013
+          },
+          {
+            "label": "tiramisu",
+            "score": 0.0006
+          },
+          {
+            "label": "carrot_cake",
+            "score": 0.0004
+          }
+        ],
+        "latency_ms": 178.0,
+        "correct": true
+      },
+      {
+        "image": "french_fries.jpg",
+        "ground_truth": "french_fries",
+        "top1_pred": "french_fries",
+        "top1_score": 0.9914,
+        "top5": [
+          {
+            "label": "french_fries",
+            "score": 0.9914
+          },
+          {
+            "label": "fish_and_chips",
+            "score": 0.0011
+          },
+          {
+            "label": "onion_rings",
+            "score": 0.0007
+          },
+          {
+            "label": "poutine",
+            "score": 0.0004
+          },
+          {
+            "label": "hamburger",
+            "score": 0.0004
+          }
+        ],
+        "latency_ms": 175.6,
+        "correct": true
+      },
+      {
+        "image": "grilled_salmon.jpg",
+        "ground_truth": "grilled_salmon",
+        "top1_pred": "grilled_salmon",
+        "top1_score": 0.989,
+        "top5": [
+          {
+            "label": "grilled_salmon",
+            "score": 0.989
+          },
+          {
+            "label": "pork_chop",
+            "score": 0.0012
+          },
+          {
+            "label": "chicken_curry",
+            "score": 0.0012
+          },
+          {
+            "label": "fried_rice",
+            "score": 0.0004
+          },
+          {
+            "label": "shrimp_and_grits",
+            "score": 0.0003
+          }
+        ],
+        "latency_ms": 179.6,
+        "correct": true
+      },
+      {
+        "image": "hamburger.jpg",
+        "ground_truth": "hamburger",
+        "top1_pred": "hamburger",
+        "top1_score": 0.896,
+        "top5": [
+          {
+            "label": "hamburger",
+            "score": 0.896
+          },
+          {
+            "label": "pulled_pork_sandwich",
+            "score": 0.0828
+          },
+          {
+            "label": "onion_rings",
+            "score": 0.0028
+          },
+          {
+            "label": "french_fries",
+            "score": 0.0027
+          },
+          {
+            "label": "grilled_cheese_sandwich",
+            "score": 0.0016
+          }
+        ],
+        "latency_ms": 174.6,
+        "correct": true
+      },
+      {
+        "image": "omelette.jpg",
+        "ground_truth": "omelette",
+        "top1_pred": "omelette",
+        "top1_score": 0.9823,
+        "top5": [
+          {
+            "label": "omelette",
+            "score": 0.9823
+          },
+          {
+            "label": "pancakes",
+            "score": 0.0035
+          },
+          {
+            "label": "huevos_rancheros",
+            "score": 0.0019
+          },
+          {
+            "label": "breakfast_burrito",
+            "score": 0.0008
+          },
+          {
+            "label": "pizza",
+            "score": 0.0008
+          }
+        ],
+        "latency_ms": 174.6,
+        "correct": true
+      },
+      {
+        "image": "pad_thai.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "pad_thai",
+        "top1_score": 0.9959,
+        "top5": [
+          {
+            "label": "pad_thai",
+            "score": 0.9959
+          },
+          {
+            "label": "takoyaki",
+            "score": 0.0002
+          },
+          {
+            "label": "spaghetti_carbonara",
+            "score": 0.0002
+          },
+          {
+            "label": "fried_rice",
+            "score": 0.0002
+          },
+          {
+            "label": "hot_and_sour_soup",
+            "score": 0.0001
+          }
+        ],
+        "latency_ms": 175.7,
+        "correct": false
+      },
+      {
+        "image": "pizza.jpg",
+        "ground_truth": "pizza",
+        "top1_pred": "pizza",
+        "top1_score": 0.9971,
+        "top5": [
+          {
+            "label": "pizza",
+            "score": 0.9971
+          },
+          {
+            "label": "beef_carpaccio",
+            "score": 0.0002
+          },
+          {
+            "label": "garlic_bread",
+            "score": 0.0001
+          },
+          {
+            "label": "bruschetta",
+            "score": 0.0001
+          },
+          {
+            "label": "omelette",
+            "score": 0.0001
+          }
+        ],
+        "latency_ms": 173.4,
+        "correct": true
+      },
+      {
+        "image": "spaghetti_bolognese.jpg",
+        "ground_truth": "spaghetti_bolognese",
+        "top1_pred": "spaghetti_bolognese",
+        "top1_score": 0.9913,
+        "top5": [
+          {
+            "label": "spaghetti_bolognese",
+            "score": 0.9913
+          },
+          {
+            "label": "spaghetti_carbonara",
+            "score": 0.0023
+          },
+          {
+            "label": "lasagna",
+            "score": 0.0005
+          },
+          {
+            "label": "ravioli",
+            "score": 0.0004
+          },
+          {
+            "label": "pad_thai",
+            "score": 0.0003
+          }
+        ],
+        "latency_ms": 175.3,
+        "correct": true
+      },
+      {
+        "image": "sushi.jpg",
+        "ground_truth": "sushi",
+        "top1_pred": "sushi",
+        "top1_score": 0.9965,
+        "top5": [
+          {
+            "label": "sushi",
+            "score": 0.9965
+          },
+          {
+            "label": "sashimi",
+            "score": 0.0004
+          },
+          {
+            "label": "spring_rolls",
+            "score": 0.0001
+          },
+          {
+            "label": "dumplings",
+            "score": 0.0001
+          },
+          {
+            "label": "carrot_cake",
+            "score": 0.0001
+          }
+        ],
+        "latency_ms": 174.6,
+        "correct": true
+      },
+      {
+        "image": "tacos.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "tacos",
+        "top1_score": 0.9954,
+        "top5": [
+          {
+            "label": "tacos",
+            "score": 0.9954
+          },
+          {
+            "label": "chicken_quesadilla",
+            "score": 0.0004
+          },
+          {
+            "label": "huevos_rancheros",
+            "score": 0.0003
+          },
+          {
+            "label": "ceviche",
+            "score": 0.0002
+          },
+          {
+            "label": "falafel",
+            "score": 0.0002
+          }
+        ],
+        "latency_ms": 174.6,
+        "correct": false
+      },
+      {
+        "image": "tiramisu.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "tiramisu",
+        "top1_score": 0.9623,
+        "top5": [
+          {
+            "label": "tiramisu",
+            "score": 0.9623
+          },
+          {
+            "label": "lasagna",
+            "score": 0.0103
+          },
+          {
+            "label": "carrot_cake",
+            "score": 0.0086
+          },
+          {
+            "label": "cannoli",
+            "score": 0.0021
+          },
+          {
+            "label": "red_velvet_cake",
+            "score": 0.0008
+          }
+        ],
+        "latency_ms": 175.6,
+        "correct": false
+      }
+    ]
+  },
+  "Kaludi/food-category-classification-v2.0": {
+    "model_id": "Kaludi/food-category-classification-v2.0",
+    "label": "Kaludi/food-category-classification-v2.0 (12 classes)",
+    "n_images": 15,
+    "n_labeled": 10,
+    "top1_accuracy": 0.0,
+    "avg_latency_ms": 313.0,
+    "p95_latency_ms": 337.3,
+    "predictions": [
+      {
+        "image": "apple_pie.jpg",
+        "ground_truth": "apple_pie",
+        "top1_pred": "Dessert",
+        "top1_score": 0.8632,
+        "top5": [
+          {
+            "label": "Dessert",
+            "score": 0.8632
+          },
+          {
+            "label": "Dairy",
+            "score": 0.0659
+          },
+          {
+            "label": "Egg",
+            "score": 0.0542
+          },
+          {
+            "label": "Fried Food",
+            "score": 0.0098
+          },
+          {
+            "label": "Bread",
+            "score": 0.0024
+          }
+        ],
+        "latency_ms": 381.8,
+        "correct": false
+      },
+      {
+        "image": "bibimbap.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "Noodles",
+        "top1_score": 0.9879,
+        "top5": [
+          {
+            "label": "Noodles",
+            "score": 0.9879
+          },
+          {
+            "label": "Rice",
+            "score": 0.0047
+          },
+          {
+            "label": "Dairy",
+            "score": 0.0025
+          },
+          {
+            "label": "Vegetable",
+            "score": 0.0024
+          },
+          {
+            "label": "Fried Food",
+            "score": 0.001
+          }
+        ],
+        "latency_ms": 302.5,
+        "correct": false
+      },
+      {
+        "image": "bruschetta.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "Bread",
+        "top1_score": 0.4496,
+        "top5": [
+          {
+            "label": "Bread",
+            "score": 0.4496
+          },
+          {
+            "label": "Dessert",
+            "score": 0.2873
+          },
+          {
+            "label": "Egg",
+            "score": 0.1432
+          },
+          {
+            "label": "Meat",
+            "score": 0.0368
+          },
+          {
+            "label": "Vegetable",
+            "score": 0.0322
+          }
+        ],
+        "latency_ms": 298.0,
+        "correct": false
+      },
+      {
+        "image": "caesar_salad.jpg",
+        "ground_truth": "caesar_salad",
+        "top1_pred": "Vegetable",
+        "top1_score": 0.7187,
+        "top5": [
+          {
+            "label": "Vegetable",
+            "score": 0.7187
+          },
+          {
+            "label": "Dairy",
+            "score": 0.1589
+          },
+          {
+            "label": "Egg",
+            "score": 0.0482
+          },
+          {
+            "label": "Bread",
+            "score": 0.03
+          },
+          {
+            "label": "Soup",
+            "score": 0.0181
+          }
+        ],
+        "latency_ms": 316.8,
+        "correct": false
+      },
+      {
+        "image": "chocolate_cake.jpg",
+        "ground_truth": "chocolate_cake",
+        "top1_pred": "Dessert",
+        "top1_score": 0.979,
+        "top5": [
+          {
+            "label": "Dessert",
+            "score": 0.979
+          },
+          {
+            "label": "Dairy",
+            "score": 0.014
+          },
+          {
+            "label": "Egg",
+            "score": 0.0027
+          },
+          {
+            "label": "Meat",
+            "score": 0.0014
+          },
+          {
+            "label": "Bread",
+            "score": 0.0008
+          }
+        ],
+        "latency_ms": 307.4,
+        "correct": false
+      },
+      {
+        "image": "french_fries.jpg",
+        "ground_truth": "french_fries",
+        "top1_pred": "Fried Food",
+        "top1_score": 0.9374,
+        "top5": [
+          {
+            "label": "Fried Food",
+            "score": 0.9374
+          },
+          {
+            "label": "Meat",
+            "score": 0.0213
+          },
+          {
+            "label": "Bread",
+            "score": 0.0152
+          },
+          {
+            "label": "Vegetable",
+            "score": 0.0091
+          },
+          {
+            "label": "Egg",
+            "score": 0.0087
+          }
+        ],
+        "latency_ms": 321.7,
+        "correct": false
+      },
+      {
+        "image": "grilled_salmon.jpg",
+        "ground_truth": "grilled_salmon",
+        "top1_pred": "Rice",
+        "top1_score": 0.9428,
+        "top5": [
+          {
+            "label": "Rice",
+            "score": 0.9428
+          },
+          {
+            "label": "Bread",
+            "score": 0.0403
+          },
+          {
+            "label": "Meat",
+            "score": 0.0056
+          },
+          {
+            "label": "Egg",
+            "score": 0.0039
+          },
+          {
+            "label": "Dessert",
+            "score": 0.0023
+          }
+        ],
+        "latency_ms": 308.5,
+        "correct": false
+      },
+      {
+        "image": "hamburger.jpg",
+        "ground_truth": "hamburger",
+        "top1_pred": "Bread",
+        "top1_score": 0.3323,
+        "top5": [
+          {
+            "label": "Bread",
+            "score": 0.3323
+          },
+          {
+            "label": "Fried Food",
+            "score": 0.3145
+          },
+          {
+            "label": "Dessert",
+            "score": 0.2662
+          },
+          {
+            "label": "Egg",
+            "score": 0.0284
+          },
+          {
+            "label": "Dairy",
+            "score": 0.0184
+          }
+        ],
+        "latency_ms": 319.8,
+        "correct": false
+      },
+      {
+        "image": "omelette.jpg",
+        "ground_truth": "omelette",
+        "top1_pred": "Egg",
+        "top1_score": 0.9966,
+        "top5": [
+          {
+            "label": "Egg",
+            "score": 0.9966
+          },
+          {
+            "label": "Dairy",
+            "score": 0.001
+          },
+          {
+            "label": "Noodles",
+            "score": 0.0005
+          },
+          {
+            "label": "Dessert",
+            "score": 0.0005
+          },
+          {
+            "label": "Bread",
+            "score": 0.0003
+          }
+        ],
+        "latency_ms": 324.9,
+        "correct": false
+      },
+      {
+        "image": "pad_thai.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "Noodles",
+        "top1_score": 0.8924,
+        "top5": [
+          {
+            "label": "Noodles",
+            "score": 0.8924
+          },
+          {
+            "label": "Rice",
+            "score": 0.0963
+          },
+          {
+            "label": "Fried Food",
+            "score": 0.0092
+          },
+          {
+            "label": "Vegetable",
+            "score": 0.0006
+          },
+          {
+            "label": "Dairy",
+            "score": 0.0004
+          }
+        ],
+        "latency_ms": 337.3,
+        "correct": false
+      },
+      {
+        "image": "pizza.jpg",
+        "ground_truth": "pizza",
+        "top1_pred": "Noodles",
+        "top1_score": 0.4561,
+        "top5": [
+          {
+            "label": "Noodles",
+            "score": 0.4561
+          },
+          {
+            "label": "Rice",
+            "score": 0.3168
+          },
+          {
+            "label": "Meat",
+            "score": 0.0843
+          },
+          {
+            "label": "Soup",
+            "score": 0.0648
+          },
+          {
+            "label": "Egg",
+            "score": 0.0311
+          }
+        ],
+        "latency_ms": 306.4,
+        "correct": false
+      },
+      {
+        "image": "spaghetti_bolognese.jpg",
+        "ground_truth": "spaghetti_bolognese",
+        "top1_pred": "Noodles",
+        "top1_score": 0.9987,
+        "top5": [
+          {
+            "label": "Noodles",
+            "score": 0.9987
+          },
+          {
+            "label": "Fried Food",
+            "score": 0.0006
+          },
+          {
+            "label": "Soup",
+            "score": 0.0002
+          },
+          {
+            "label": "Rice",
+            "score": 0.0002
+          },
+          {
+            "label": "Egg",
+            "score": 0.0001
+          }
+        ],
+        "latency_ms": 281.3,
+        "correct": false
+      },
+      {
+        "image": "sushi.jpg",
+        "ground_truth": "sushi",
+        "top1_pred": "Rice",
+        "top1_score": 0.9501,
+        "top5": [
+          {
+            "label": "Rice",
+            "score": 0.9501
+          },
+          {
+            "label": "Egg",
+            "score": 0.0252
+          },
+          {
+            "label": "Dairy",
+            "score": 0.0159
+          },
+          {
+            "label": "Seafood",
+            "score": 0.0023
+          },
+          {
+            "label": "Dessert",
+            "score": 0.002
+          }
+        ],
+        "latency_ms": 296.1,
+        "correct": false
+      },
+      {
+        "image": "tacos.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "Egg",
+        "top1_score": 0.7121,
+        "top5": [
+          {
+            "label": "Egg",
+            "score": 0.7121
+          },
+          {
+            "label": "Noodles",
+            "score": 0.0727
+          },
+          {
+            "label": "Dairy",
+            "score": 0.0629
+          },
+          {
+            "label": "Vegetable",
+            "score": 0.034
+          },
+          {
+            "label": "Soup",
+            "score": 0.0322
+          }
+        ],
+        "latency_ms": 289.4,
+        "correct": false
+      },
+      {
+        "image": "tiramisu.jpg",
+        "ground_truth": "unknown",
+        "top1_pred": "Dessert",
+        "top1_score": 0.9981,
+        "top5": [
+          {
+            "label": "Dessert",
+            "score": 0.9981
+          },
+          {
+            "label": "Bread",
+            "score": 0.0014
+          },
+          {
+            "label": "Egg",
+            "score": 0.0001
+          },
+          {
+            "label": "Meat",
+            "score": 0.0001
+          },
+          {
+            "label": "Dairy",
+            "score": 0.0001
+          }
+        ],
+        "latency_ms": 303.7,
+        "correct": false
+      }
+    ]
+  }
+}

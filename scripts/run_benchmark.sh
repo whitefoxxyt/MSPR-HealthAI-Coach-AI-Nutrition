@@ -58,7 +58,7 @@ log "Dépendance installée."
 # 4. Téléchargement des images Food-101
 # ---------------------------------------------------------------------------
 log "Téléchargement des images de test depuis Food-101..."
-docker exec -it "$CONTAINER" python scripts/download_test_images.py \
+docker exec "$CONTAINER" python scripts/download_test_images.py \
     --output-dir data/benchmark_images \
     --n 15
 log "Images prêtes."
@@ -68,7 +68,7 @@ log "Images prêtes."
 # ---------------------------------------------------------------------------
 log "Lancement du benchmark (nateraw/food vs Kaludi)..."
 warn "Les modèles sont téléchargés au premier lancement (~350 Mo). Patience..."
-docker exec -it "$CONTAINER" python scripts/benchmark_models.py \
+docker exec "$CONTAINER" python scripts/benchmark_models.py \
     --images-dir data/benchmark_images \
     --output docs/benchmark_results.json
 
