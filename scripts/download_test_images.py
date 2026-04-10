@@ -9,9 +9,12 @@ Usage :
 """
 
 import argparse
+from io import BytesIO
 from pathlib import Path
 
 from datasets import load_dataset
+from datasets import Image as HFImage
+from PIL import Image
 
 
 CLASSES = [
@@ -42,7 +45,10 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("Chargement du dataset Food-101 (streaming)...")
+    # decode=False : on récupère les bytes bruts pour éviter le crash EXIF
+    # de PIL au niveau C (UnicodeDecodeError non rattrapable par try/except)
     ds = load_dataset("food101", split="validation", streaming=True)
+    ds = ds.cast_column("image", HFImage(decode=False))
 
     targets = set(CLASSES[: args.n])
     saved: dict[str, bool] = {}
@@ -56,15 +62,9 @@ def main() -> None:
 
         out_path = args.output_dir / f"{class_name}.jpg"
         try:
-            img = sample["image"]
-            # Reconstruire depuis les bytes bruts pour contourner les EXIF corrompus
-            from io import BytesIO
-            buf = BytesIO()
-            img.save(buf, format="JPEG")
-            buf.seek(0)
-            from PIL import Image
-            clean = Image.open(buf).convert("RGB")
-            clean.save(out_path, "JPEG")
+            raw: bytes = sample["image"]["bytes"]
+            img = Image.open(BytesIO(raw)).convert("RGB")
+            img.save(out_path, "JPEG")
         except Exception as e:
             print(f"  {class_name} ignoré (image corrompue : {e}), passage au suivant...")
             continue
