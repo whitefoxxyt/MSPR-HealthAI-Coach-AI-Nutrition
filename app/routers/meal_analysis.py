@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import asyncio
 
-import httpx
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db.models import MealAnalysis, NutritionGoal
 from app.db.session import get_db
+from app.services import jwt_decoder
 from app.services.food_classifier import classify_image
 from app.services.nutrition_lookup import lookup_nutrition
-from app.services.spring_client import get_user_me
 
 router = APIRouter()
 
@@ -95,21 +94,9 @@ async def analyze_meal(
         raise HTTPException(status_code=401, detail="Authorization header invalide.")
     jwt_token = authorization.removeprefix("Bearer ")
 
-    # --- Profil utilisateur via Spring Boot ---
-    try:
-        user_profile = await get_user_me(jwt_token)
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=exc.response.status_code,
-            detail="Authentification refusée par le service utilisateur.",
-        )
-    except httpx.RequestError:
-        raise HTTPException(status_code=503, detail="Service utilisateur indisponible.")
-
-    try:
-        user_id: int = user_profile["id"]
-    except KeyError:
-        raise HTTPException(status_code=502, detail="Réponse inattendue du service utilisateur (champ 'id' manquant).")
+    # --- Identite utilisateur (decode local du JWT) ---
+    identity = jwt_decoder.decode(jwt_token)
+    user_id: str = identity.user_id
 
     # --- Classification (CPU-bound → thread pool) ---
     try:
