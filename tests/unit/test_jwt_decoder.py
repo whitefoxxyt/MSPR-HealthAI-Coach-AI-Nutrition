@@ -92,3 +92,23 @@ def test_decode_unexpected_hs_algorithm_is_rejected():
         decode(token)
 
     assert exc.value.status_code == 401
+
+
+def test_decode_missing_exp_claim_raises_401():
+    token = _encode({"sub": "user-123"})
+
+    with pytest.raises(HTTPException) as exc:
+        decode(token)
+
+    assert exc.value.status_code == 401
+
+
+def test_decode_with_empty_secret_fails_closed(monkeypatch):
+    # secret vide = misconfiguration ; doit refuser plutot que de valider n'importe quoi
+    monkeypatch.setattr(settings, "better_auth_secret", "")
+    token = jwt.encode({"sub": "user-123", "exp": _future_exp()}, "", algorithm="HS256")
+
+    with pytest.raises(HTTPException) as exc:
+        decode(token)
+
+    assert exc.value.status_code == 500

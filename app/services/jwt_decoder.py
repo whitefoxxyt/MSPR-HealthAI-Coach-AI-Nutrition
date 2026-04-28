@@ -15,6 +15,9 @@ class UserIdentity:
 
 
 def decode(token: str) -> UserIdentity:
+    # Fail-closed : un secret vide rendrait n'importe quel JWT signe avec "" valide.
+    if not settings.better_auth_secret:
+        raise HTTPException(status_code=500, detail="JWT secret non configure.")
     try:
         payload = jwt.decode(
             token,
