@@ -4,7 +4,9 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
+import unicodedata
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -32,6 +34,7 @@ _OLLAMA_SEMAPHORE = asyncio.Semaphore(2)
 
 _OLLAMA_TIMEOUT_S = 30.0
 _MAX_ATTEMPTS = 3  # 1 essai initial + 2 retries
+_RETRY_BACKOFF_S = 0.5  # backoff exponentiel : 0.5s, 1.0s entre retries
 _OLLAMA_MODEL = "gemma3:4b"
 
 _PLAN_PROMPT_TEMPLATE = (
@@ -87,13 +90,13 @@ async def generate_plan(
     inputs: PlanInputs,
     db: Session,
     bypass_cache: bool = False,
-    fallback_loader: Callable[[str, str], dict | None] | None = None,
+    fallback_loader: Callable[[str, str], dict[str, Any] | None] | None = None,
 ) -> MealPlan:
     """Genere un plan repas via Ollama, avec cache, retry, semaphore, validation."""
     inputs_hash = compute_inputs_hash(inputs)
 
     if not bypass_cache:
-        cached = _lookup_cached_plan(db, inputs_hash)
+        cached = _lookup_cached_plan(db, inputs.user_id, inputs_hash)
         if cached is not None:
             return cached
 
@@ -169,7 +172,15 @@ async def _attempt_with_retry(
             last_error = exc
             status = "retry" if attempt < _MAX_ATTEMPTS else "fallback"
             _log_call(log_id, start, attempt, status, error=str(exc))
-    _LOGGER.warning("llm_client : echec apres %d tentatives : %s", _MAX_ATTEMPTS, last_error)
+            if attempt < _MAX_ATTEMPTS:
+                # Backoff exponentiel : 0.5s, 1.0s. Laisse Ollama respirer.
+                await asyncio.sleep(_RETRY_BACKOFF_S * (2 ** (attempt - 1)))
+    _LOGGER.warning(
+        "llm_client : echec apres %d tentatives (log_id=%s) : %s",
+        _MAX_ATTEMPTS,
+        log_id,
+        last_error,
+    )
     raise _OllamaCallFailed(str(last_error)) from last_error
 
 
@@ -210,18 +221,34 @@ def _validate_plan(raw_response: str, inputs: PlanInputs) -> MealPlan:
     return plan
 
 
+def _normalize(text_value: str) -> str:
+    """Casefold + strip des accents pour matcher 'lait' contre 'Lait écrémé'."""
+    decomposed = unicodedata.normalize("NFD", text_value)
+    stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
+    return stripped.casefold()
+
+
 def _enforce_allergy_absence(plan: MealPlan, allergies: list[str]) -> None:
+    """Rejette un plan si un ingredient contient un allergene en mot entier.
+
+    Utilise un match a frontiere de mot (\\b) plutot que substring : evite
+    les faux positifs comme 'lait' contre 'laitue' ou 'oeuf' contre 'boeuf'.
+    """
     if not allergies:
         return
-    lowered = [a.lower() for a in allergies]
+    patterns = [
+        (raw, re.compile(rf"\b{re.escape(_normalize(raw))}\b"))
+        for raw in allergies
+        if raw.strip()
+    ]
     for day in plan.days:
         for meal in day.meals:
             for ing in meal.ingredients:
-                low = ing.lower()
-                for allergen in lowered:
-                    if allergen in low:
+                normalized_ing = _normalize(ing)
+                for raw_allergen, pattern in patterns:
+                    if pattern.search(normalized_ing):
                         raise _PlanValidationError(
-                            f"Allergene {allergen!r} present dans {ing!r}."
+                            f"Allergene {raw_allergen!r} present dans {ing!r}."
                         )
 
 
@@ -235,17 +262,23 @@ def _build_plan_prompt(inputs: PlanInputs) -> str:
     )
 
 
-def _lookup_cached_plan(db: Session, inputs_hash: str) -> MealPlan | None:
-    """Recupere le dernier plan en cache (< 7 jours) pour ce inputs_hash."""
+def _lookup_cached_plan(db: Session, user_id: int, inputs_hash: str) -> MealPlan | None:
+    """Recupere le dernier plan en cache (< 7 jours) pour ce inputs_hash.
+
+    Filtre redondant sur user_id : le hash inclut deja user_id, mais l'expliciter
+    documente la requete et protege en defense-en-profondeur si la canonicalisation
+    venait a changer.
+    """
     row = db.execute(
         text(
             "SELECT plan FROM meal_plans "
-            "WHERE inputs_hash = :h "
+            "WHERE user_id = :uid "
+            "AND inputs_hash = :h "
             "AND generated_at > NOW() - INTERVAL '7 days' "
             "ORDER BY generated_at DESC "
             "LIMIT 1"
         ),
-        {"h": inputs_hash},
+        {"uid": user_id, "h": inputs_hash},
     ).fetchone()
     if row is None:
         return None
@@ -253,7 +286,11 @@ def _lookup_cached_plan(db: Session, inputs_hash: str) -> MealPlan | None:
 
 
 def _persist_plan(db: Session, plan: MealPlan, inputs_hash: str, inputs: PlanInputs) -> None:
-    """Insere une ligne meal_plans avec le plan complet et son inputs_hash."""
+    """Insere une ligne meal_plans avec le plan complet et son inputs_hash.
+
+    Flush sans commit : la decision de commit revient au caller (handler FastAPI),
+    pour ne pas finaliser une transaction qui contient peut-etre d'autres ecritures.
+    """
     db.execute(
         text(
             "INSERT INTO meal_plans (user_id, plan, objective, constraints, inputs_hash) "
@@ -267,17 +304,17 @@ def _persist_plan(db: Session, plan: MealPlan, inputs_hash: str, inputs: PlanInp
             "h": inputs_hash,
         },
     )
-    db.commit()
+    db.flush()
 
 
 def _build_fallback_plan(
     inputs: PlanInputs,
     inputs_hash: str,
     db: Session,
-    fallback_loader: Callable[[str, str], dict | None] | None,
+    fallback_loader: Callable[[str, str], dict[str, Any] | None] | None,
 ) -> MealPlan:
     """Construit un plan en mode degrade : matrice statique ou squelette vide."""
-    raw: dict | None = None
+    raw: dict[str, Any] | None = None
     if fallback_loader is not None:
         raw = fallback_loader(inputs.objective, inputs.diet_type or "")
 

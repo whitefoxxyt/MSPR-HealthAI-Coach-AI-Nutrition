@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 import pytest
 import respx
+from sqlalchemy import text
 
 from app.models.schemas import HealthGoal, Imbalance, MealPlan, PlanInputs, RecommendationContext
 from app.services.llm_client import (
@@ -103,8 +104,6 @@ async def test_generate_plan_success_first_try(db_session, mock_ollama: respx.Mo
 async def test_generate_plan_persists_with_inputs_hash(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    from sqlalchemy import text
-
     inputs = PlanInputs(user_id=42, objective="weight_loss", duration_days=3)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(_valid_plan_dict())
@@ -255,8 +254,6 @@ async def test_generate_plan_fallback_without_loader_returns_empty_plan(
 async def test_generate_plan_returns_cached_without_calling_ollama(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    from sqlalchemy import text
-
     inputs = PlanInputs(user_id=30, objective="balance", duration_days=2)
     cached = _valid_plan_dict()
     cached["total_calories"] = 9999  # marqueur pour distinguer du mock
@@ -288,8 +285,6 @@ async def test_generate_plan_returns_cached_without_calling_ollama(
 async def test_generate_plan_ignores_cache_older_than_seven_days(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    from sqlalchemy import text
-
     inputs = PlanInputs(user_id=31, objective="balance", duration_days=2)
     stale = _valid_plan_dict()
     stale["total_calories"] = 9999
@@ -322,8 +317,6 @@ async def test_generate_plan_ignores_cache_older_than_seven_days(
 async def test_generate_plan_bypass_cache_calls_ollama_even_with_hit(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    from sqlalchemy import text
-
     inputs = PlanInputs(user_id=32, objective="balance", duration_days=2)
     cached = _valid_plan_dict()
     cached["total_calories"] = 9999
@@ -389,6 +382,64 @@ async def test_generate_plan_rejects_plan_with_allergic_ingredient(
     assert plan.fallback is False
     assert all(
         "arachide" not in ing.lower()
+        for day in plan.days
+        for meal in day.meals
+        for ing in meal.ingredients
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_plan_does_not_false_positive_lait_in_laitue(
+    db_session, mock_ollama: respx.MockRouter
+) -> None:
+    """Anti-regression : 'lait' (allergie) ne doit pas matcher 'laitue' (ingredient)."""
+    inputs = PlanInputs(
+        user_id=43,
+        objective="balance",
+        duration_days=1,
+        allergies=["lait"],
+    )
+    safe = _valid_plan_dict()
+    # 'laitue' contient 'lait' en sous-chaine mais c'est un mot different.
+    # 'oeuf' / 'boeuf' meme piege en francais.
+    safe["days"][0]["meals"][0]["ingredients"] = ["laitue", "boeuf", "tomate"]
+    route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_response(safe)
+    )
+
+    plan = await generate_plan(inputs, db_session)
+
+    assert plan.fallback is False
+    assert route.call_count == 1  # accepte du premier coup, aucun retry
+    assert plan.days[0].meals[0].ingredients == ["laitue", "boeuf", "tomate"]
+
+
+@pytest.mark.asyncio
+async def test_generate_plan_rejects_allergen_with_accents(
+    db_session, mock_ollama: respx.MockRouter
+) -> None:
+    """L'allergene 'lait' doit matcher 'Lait ecreme' meme avec capitalisation/accent."""
+    inputs = PlanInputs(
+        user_id=44,
+        objective="balance",
+        duration_days=1,
+        allergies=["lait"],
+    )
+    bad = _valid_plan_dict()
+    bad["days"][0]["meals"][0]["ingredients"] = ["Lait écrémé", "céréales"]
+    good = _valid_plan_dict()
+    mock_ollama.post(re.compile(r".*/api/generate$")).mock(
+        side_effect=[
+            httpx.Response(200, json=_ollama_response(bad)),
+            httpx.Response(200, json=_ollama_response(good)),
+        ]
+    )
+
+    plan = await generate_plan(inputs, db_session)
+
+    assert plan.fallback is False
+    assert all(
+        "lait" not in ing.lower().replace("é", "e")
         for day in plan.days
         for meal in day.meals
         for ing in meal.ingredients
