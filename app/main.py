@@ -14,7 +14,7 @@ Deux pipelines d'IA sont exposes :
 - **Analyse de repas** : photo en entree, classification HuggingFace (`nateraw/food`, modele Food-101), lookup nutritionnel sur les datasets ETL, detection de desequilibres macros vs profil utilisateur, puis recommandations generees par Ollama (Gemma3:4b) avec fallback matrice statique.
 - **Generation de plans repas** : objectif de sante, preferences alimentaires et budget, prompt structure soumis a Ollama, validation du JSON et persistance du plan sur 1 a 30 jours.
 
-Le service expose egalement la gestion du profil nutritionnel (`nutrition-goals/me`) et l'historique pagine des analyses (`meal-analyses/me`). L'authentification se fait via JWT signe par MSPR-AUTH (`Authorization: Bearer <jwt>`).
+Le service expose egalement la gestion du profil nutritionnel (`nutrition-goals/me`) et l'historique pagine des analyses et des plans (`meal-analyses/me`, `meal-plans/me`). L'authentification se fait via JWT signe par MSPR-AUTH (`Authorization: Bearer <jwt>`).
 """
 
 TAGS_METADATA = [
@@ -32,7 +32,7 @@ TAGS_METADATA = [
     },
     {
         "name": "Historique",
-        "description": "Lecture pagine des analyses passees pour l'utilisateur authentifie.",
+        "description": "Lecture pagine des analyses de repas et des plans generes pour l'utilisateur authentifie.",
     },
     {
         "name": "Sante",
