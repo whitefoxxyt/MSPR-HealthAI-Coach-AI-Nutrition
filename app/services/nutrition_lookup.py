@@ -47,10 +47,10 @@ def lookup_nutrition(
             params = {f"kw{i}": f"%{kw}%" for i, kw in enumerate(keywords)}
             row = db.execute(
                 text(
-                    f"SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
-                    f"FROM nutrition_entries "
+                    "SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
+                    "FROM nutrition_entries "
                     f"WHERE {conditions} "
-                    f"LIMIT 1"
+                    "LIMIT 1"
                 ),
                 params,
             ).fetchone()
