@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     db_user: str = "healthai_user"
     db_password: str = "password"
     ollama_host: str = "http://ollama:11434"
-    spring_api_url: str = "http://mspr-healthai-api:8080"
+    better_auth_secret: str = ""
 
     @property
     def database_url(self) -> str:
