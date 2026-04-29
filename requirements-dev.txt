@@ -1,7 +1,7 @@
 -r requirements.txt
 pytest-asyncio==0.25.0
 pytest-cov==6.0.0
-respx==0.21.1
+respx==0.23.1
 testcontainers[postgresql]==4.9.0
 python-jose[cryptography]==3.3.0
 ruff==0.8.4

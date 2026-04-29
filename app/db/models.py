@@ -32,6 +32,8 @@ class MealPlan(Base):
     plan = Column(JSONB, nullable=False, server_default=text("'{}'"))
     objective = Column(String(100))
     constraints = Column(JSONB, nullable=False, server_default=text("'{}'"))
+    # SHA256 des inputs canonicalises ; cle de cache (V9). Index dedie en BDD.
+    inputs_hash = Column(String(64))
     generated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
