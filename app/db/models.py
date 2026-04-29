@@ -45,3 +45,4 @@ class NutritionGoal(Base):
     fat_g = Column(Numeric(8, 2))
     allergies = Column(ARRAY(String))
     diet_type = Column(String(50))
+    health_goal = Column(String(30))

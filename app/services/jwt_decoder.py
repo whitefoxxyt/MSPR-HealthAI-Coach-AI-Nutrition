@@ -25,6 +25,6 @@ def decode(token: str) -> UserIdentity:
             algorithms=["HS256"],
             options={"require": ["sub", "exp"]},
         )
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Token invalide.")
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Token invalide.") from exc
     return UserIdentity(user_id=payload["sub"], email=payload.get("email"))
