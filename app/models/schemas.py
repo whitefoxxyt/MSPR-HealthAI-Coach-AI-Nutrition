@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -18,8 +19,8 @@ class HealthGoal(str, Enum):
 
 class MealAnalysisItem(BaseModel):
     id: int
-    detected_foods: list
-    macros: dict
+    detected_foods: list[dict[str, Any]]
+    macros: dict[str, float]
     recommendations: list[str]
     created_at: datetime
 
