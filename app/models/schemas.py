@@ -124,6 +124,48 @@ class MealPlanResponse(BaseModel):
     days: list[MealDay]
 
 
+class MealPlanHistoryItem(BaseModel):
+    id: int
+    objective: str | None
+    constraints: dict[str, Any]
+    plan: dict[str, Any]
+    generated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedPlansResponse(BaseModel):
+    items: list[MealPlanHistoryItem]
+    total: int
+    limit: int
+    offset: int
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "items": [
+                    {
+                        "id": 42,
+                        "objective": "weight_loss",
+                        "constraints": {
+                            "diet_type": "vegan",
+                            "duration_days": 7,
+                            "allergies": [],
+                        },
+                        "plan": {
+                            "days": [{"day": 1, "meals": []}],
+                        },
+                        "generated_at": "2026-04-29T10:15:00",
+                    }
+                ],
+                "total": 17,
+                "limit": 20,
+                "offset": 0,
+            }
+        }
+    }
+
+
 # LLM client : inputs / outputs (issue NUT-7).
 
 
