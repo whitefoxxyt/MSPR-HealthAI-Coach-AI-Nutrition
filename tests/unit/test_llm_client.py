@@ -10,7 +10,13 @@ import pytest
 import respx
 from sqlalchemy import text
 
-from app.models.schemas import HealthGoal, Imbalance, MealPlan, PlanInputs, RecommendationContext
+from app.models.schemas import (
+    FallbackMealPlan,
+    HealthGoal,
+    Imbalance,
+    PlanInputs,
+    RecommendationContext,
+)
 from app.services.llm_client import (
     compute_inputs_hash,
     generate_plan,
@@ -23,25 +29,35 @@ def _ollama_response(plan_json: dict[str, Any]) -> dict[str, Any]:
     return {"response": json.dumps(plan_json), "done": True}
 
 
-def _valid_plan_dict() -> dict[str, Any]:
+def _valid_plan_dict(marker_calories: int = 1800) -> dict[str, Any]:
+    """Plan minimal au schema FallbackMealPlan. marker_calories permet de
+    distinguer un plan d'un autre dans les tests de cache."""
     return {
+        "fallback": False,
         "days": [
             {
                 "day": 1,
                 "meals": [
                     {
                         "name": "Salade poulet",
+                        "macros": {
+                            "calories": marker_calories,
+                            "protein_g": 35.0,
+                            "carbs_g": 20.0,
+                            "fat_g": 18.0,
+                        },
                         "ingredients": ["poulet", "salade", "tomate"],
-                        "calories": 450,
-                        "protein_g": 35.0,
-                        "carbs_g": 20.0,
-                        "fat_g": 18.0,
+                        "est_budget_eur": 4.5,
+                        "prep_time_min": 15,
                     },
                 ],
             },
         ],
-        "total_calories": 1800,
     }
+
+
+def _meal_calories(plan: FallbackMealPlan) -> int:
+    return plan.days[0].meals[0].macros.calories
 
 
 # Le hash doit etre stable face a l'ordre des allergies et des cles JSON.
@@ -94,9 +110,9 @@ async def test_generate_plan_success_first_try(db_session, mock_ollama: respx.Mo
 
     plan = await generate_plan(inputs, db_session)
 
-    assert isinstance(plan, MealPlan)
+    assert isinstance(plan, FallbackMealPlan)
     assert plan.fallback is False
-    assert plan.total_calories == 1800
+    assert _meal_calories(plan) == 1800
     assert plan.days[0].meals[0].name == "Salade poulet"
 
 
@@ -118,7 +134,7 @@ async def test_generate_plan_persists_with_inputs_hash(
     assert row is not None
     assert row.inputs_hash == compute_inputs_hash(inputs)
     assert row.user_id == 42
-    assert row.plan["total_calories"] == 1800
+    assert row.plan["days"][0]["meals"][0]["macros"]["calories"] == 1800
 
 
 @pytest.mark.asyncio
@@ -158,7 +174,7 @@ async def test_generate_plan_retries_after_first_failure(
     plan = await generate_plan(inputs, db_session)
 
     assert plan.fallback is False
-    assert plan.total_calories == 1800
+    assert _meal_calories(plan) == 1800
 
 
 @pytest.mark.asyncio
@@ -193,25 +209,32 @@ async def test_generate_plan_falls_back_after_max_attempts(
     def loader(objective: str, diet_type: str) -> dict:
         fallback_calls.append((objective, diet_type))
         return {
+            "fallback": True,
             "days": [
                 {
                     "day": 1,
                     "meals": [
                         {
                             "name": "Plan de secours",
+                            "macros": {
+                                "calories": 600,
+                                "protein_g": 20.0,
+                                "carbs_g": 80.0,
+                                "fat_g": 15.0,
+                            },
                             "ingredients": ["riz", "legumes"],
-                            "calories": 600,
+                            "est_budget_eur": 2.0,
+                            "prep_time_min": 10,
                         }
                     ],
                 }
             ],
-            "total_calories": 600,
         }
 
     plan = await generate_plan(inputs, db_session, fallback_loader=loader)
 
     assert plan.fallback is True
-    assert plan.total_calories == 600
+    assert _meal_calories(plan) == 600
     assert plan.days[0].meals[0].name == "Plan de secours"
     assert fallback_calls == [("weight_loss", "")]
 
@@ -226,7 +249,7 @@ async def test_generate_plan_makes_exactly_three_attempts_before_fallback(
     )
 
     plan = await generate_plan(
-        inputs, db_session, fallback_loader=lambda *_: {"days": [], "total_calories": 0}
+        inputs, db_session, fallback_loader=lambda *_: {"fallback": True, "days": []}
     )
 
     assert plan.fallback is True
@@ -244,7 +267,6 @@ async def test_generate_plan_fallback_without_loader_returns_empty_plan(
 
     assert plan.fallback is True
     assert plan.days == []
-    assert plan.total_calories == 0
 
 
 # generate_plan : cache
@@ -255,8 +277,7 @@ async def test_generate_plan_returns_cached_without_calling_ollama(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     inputs = PlanInputs(user_id=30, objective="balance", duration_days=2)
-    cached = _valid_plan_dict()
-    cached["total_calories"] = 9999  # marqueur pour distinguer du mock
+    cached = _valid_plan_dict(marker_calories=9999)  # marqueur pour distinguer du mock
     db_session.execute(
         text(
             "INSERT INTO meal_plans (user_id, plan, objective, inputs_hash, generated_at) "
@@ -277,7 +298,7 @@ async def test_generate_plan_returns_cached_without_calling_ollama(
 
     plan = await generate_plan(inputs, db_session)
 
-    assert plan.total_calories == 9999
+    assert _meal_calories(plan) == 9999
     assert route.call_count == 0
 
 
@@ -286,8 +307,7 @@ async def test_generate_plan_ignores_cache_older_than_seven_days(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     inputs = PlanInputs(user_id=31, objective="balance", duration_days=2)
-    stale = _valid_plan_dict()
-    stale["total_calories"] = 9999
+    stale = _valid_plan_dict(marker_calories=9999)
     db_session.execute(
         text(
             "INSERT INTO meal_plans (user_id, plan, objective, inputs_hash, generated_at) "
@@ -302,15 +322,14 @@ async def test_generate_plan_ignores_cache_older_than_seven_days(
     )
     db_session.commit()
 
-    fresh = _valid_plan_dict()
-    fresh["total_calories"] = 1234
+    fresh = _valid_plan_dict(marker_calories=1234)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(fresh)
     )
 
     plan = await generate_plan(inputs, db_session)
 
-    assert plan.total_calories == 1234
+    assert _meal_calories(plan) == 1234
 
 
 @pytest.mark.asyncio
@@ -318,8 +337,7 @@ async def test_generate_plan_bypass_cache_calls_ollama_even_with_hit(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     inputs = PlanInputs(user_id=32, objective="balance", duration_days=2)
-    cached = _valid_plan_dict()
-    cached["total_calories"] = 9999
+    cached = _valid_plan_dict(marker_calories=9999)
     db_session.execute(
         text(
             "INSERT INTO meal_plans (user_id, plan, objective, inputs_hash, generated_at) "
@@ -334,15 +352,14 @@ async def test_generate_plan_bypass_cache_calls_ollama_even_with_hit(
     )
     db_session.commit()
 
-    fresh = _valid_plan_dict()
-    fresh["total_calories"] = 4242
+    fresh = _valid_plan_dict(marker_calories=4242)
     route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(fresh)
     )
 
     plan = await generate_plan(inputs, db_session, bypass_cache=True)
 
-    assert plan.total_calories == 4242
+    assert _meal_calories(plan) == 4242
     assert route.call_count == 1
     # Verifie qu'une nouvelle ligne a ete inseree (cache + nouveau plan).
     count = db_session.execute(
@@ -451,7 +468,7 @@ async def test_generate_plan_rejects_invalid_pydantic_structure(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     inputs = PlanInputs(user_id=41, objective="balance", duration_days=1)
-    invalid = {"total_calories": "not a number"}  # manque days, type wrong
+    invalid = {"days": "not a list"}  # type incorrect : doit etre rejete par Pydantic
     good = _valid_plan_dict()
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(
         side_effect=[
@@ -503,7 +520,7 @@ async def test_generate_recommendation_returns_text_on_success(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     ctx = RecommendationContext(
-        user_id=70, imbalance=Imbalance.PROTEIN_LOW, health_goal=HealthGoal.MUSCLE_GAIN
+        user_id=70, imbalance=Imbalance.protein_low, health_goal=HealthGoal.muscle_gain
     )
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200,
@@ -521,7 +538,7 @@ async def test_generate_recommendation_falls_back_on_total_failure(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     ctx = RecommendationContext(
-        user_id=71, imbalance=Imbalance.CARBS_HIGH, health_goal=HealthGoal.WEIGHT_LOSS
+        user_id=71, imbalance=Imbalance.carbs_high, health_goal=HealthGoal.weight_loss
     )
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(500, json={"error": "boom"})
 
@@ -534,7 +551,7 @@ async def test_generate_recommendation_falls_back_on_total_failure(
     text_reco = await generate_recommendation(ctx, db_session, fallback=fb)
 
     assert text_reco == "Reduis les feculents pour atteindre ton objectif."
-    assert fallback_calls == [(Imbalance.CARBS_HIGH, HealthGoal.WEIGHT_LOSS)]
+    assert fallback_calls == [(Imbalance.carbs_high, HealthGoal.weight_loss)]
 
 
 @pytest.mark.asyncio
@@ -542,7 +559,7 @@ async def test_generate_recommendation_retries_then_succeeds(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     ctx = RecommendationContext(
-        user_id=72, imbalance=Imbalance.BALANCED, health_goal=HealthGoal.BALANCE
+        user_id=72, imbalance=Imbalance.balanced, health_goal=HealthGoal.balance
     )
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(
         side_effect=[
@@ -561,7 +578,7 @@ async def test_generate_recommendation_treats_empty_text_as_failure(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     ctx = RecommendationContext(
-        user_id=74, imbalance=Imbalance.BALANCED, health_goal=HealthGoal.BALANCE
+        user_id=74, imbalance=Imbalance.balanced, health_goal=HealthGoal.balance
     )
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(
         side_effect=[
@@ -580,7 +597,7 @@ async def test_generate_recommendation_fallback_default_when_no_callable(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     ctx = RecommendationContext(
-        user_id=73, imbalance=Imbalance.FAT_HIGH, health_goal=HealthGoal.SPORT_PERFORMANCE
+        user_id=73, imbalance=Imbalance.fat_high, health_goal=HealthGoal.sport_performance
     )
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(500, json={"error": "boom"})
 

@@ -8,6 +8,7 @@ services:
       - .env
     environment:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - AUTH_API_URL=${AUTH_API_URL:-http://mspr-healthai-auth:3000}
     depends_on:
       - ollama
     networks:

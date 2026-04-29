@@ -7,6 +7,13 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
+class HealthGoal(str, Enum):
+    weight_loss = "weight_loss"
+    muscle_gain = "muscle_gain"
+    balance = "balance"
+    sport_performance = "sport_performance"
+
+
 # MealAnalysis
 
 class MealAnalysisResponse(BaseModel):
@@ -43,6 +50,7 @@ class MealPlanResponse(BaseModel):
 # NutritionGoal
 
 class NutritionGoalRequest(BaseModel):
+    health_goal: HealthGoal | None = None
     calories_target: int | None = None
     protein_g: Decimal | None = None
     carbs_g: Decimal | None = None
@@ -57,26 +65,46 @@ class NutritionGoalResponse(NutritionGoalRequest):
     model_config = {"from_attributes": True}
 
 
-# LLM client : inputs / outputs
+# Plans repas fallback (issue NUT-8). Cf. POST /api/v1/generate-meal-plan.
+
+class MealMacros(BaseModel):
+    calories: int
+    protein_g: float
+    carbs_g: float
+    fat_g: float
 
 
-class HealthGoal(str, Enum):
-    WEIGHT_LOSS = "weight_loss"
-    MUSCLE_GAIN = "muscle_gain"
-    BALANCE = "balance"
-    SPORT_PERFORMANCE = "sport_performance"
+class Meal(BaseModel):
+    name: str
+    macros: MealMacros
+    ingredients: list[str]
+    est_budget_eur: float
+    prep_time_min: int
+
+
+class MealDay(BaseModel):
+    day: int
+    meals: list[Meal]
+
+
+class FallbackMealPlan(BaseModel):
+    fallback: bool
+    days: list[MealDay]
+
+
+# LLM client : inputs / outputs (issue NUT-7).
 
 
 class Imbalance(str, Enum):
-    BALANCED = "balanced"
-    PROTEIN_LOW = "protein_low"
-    PROTEIN_HIGH = "protein_high"
-    CARBS_LOW = "carbs_low"
-    CARBS_HIGH = "carbs_high"
-    FAT_LOW = "fat_low"
-    FAT_HIGH = "fat_high"
-    CALORIES_LOW = "calories_low"
-    CALORIES_HIGH = "calories_high"
+    balanced = "balanced"
+    protein_low = "protein_low"
+    protein_high = "protein_high"
+    carbs_low = "carbs_low"
+    carbs_high = "carbs_high"
+    fat_low = "fat_low"
+    fat_high = "fat_high"
+    calories_low = "calories_low"
+    calories_high = "calories_high"
 
 
 # Inputs pour la generation de plan repas. allergies est triee dans
@@ -89,26 +117,6 @@ class PlanInputs(BaseModel):
     allergies: list[str] = Field(default_factory=list)
     budget_per_day: Decimal | None = None
     calories_target: int | None = None
-
-
-class MealEntry(BaseModel):
-    name: str
-    ingredients: list[str]
-    calories: int
-    protein_g: float = 0.0
-    carbs_g: float = 0.0
-    fat_g: float = 0.0
-
-
-class DayPlan(BaseModel):
-    day: int
-    meals: list[MealEntry]
-
-
-class MealPlan(BaseModel):
-    days: list[DayPlan]
-    total_calories: int
-    fallback: bool = False
 
 
 class RecommendationContext(BaseModel):

@@ -17,9 +17,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.schemas import (
+    FallbackMealPlan,
     HealthGoal,
     Imbalance,
-    MealPlan,
     PlanInputs,
     RecommendationContext,
 )
@@ -43,6 +43,8 @@ _PLAN_PROMPT_TEMPLATE = (
     "Regime : {diet_type}.\n"
     "Allergies a eviter (aucun ingredient ne doit en contenir) : {allergies}.\n"
     "Cible calorique journaliere : {calories_target}.\n"
+    "Pour chaque repas : name, macros (calories, protein_g, carbs_g, fat_g),\n"
+    "ingredients (liste), est_budget_eur, prep_time_min. Mets fallback=false.\n"
     "Reponds uniquement par un JSON conforme au schema fourni."
 )
 
@@ -91,7 +93,7 @@ async def generate_plan(
     db: Session,
     bypass_cache: bool = False,
     fallback_loader: Callable[[str, str], dict[str, Any] | None] | None = None,
-) -> MealPlan:
+) -> FallbackMealPlan:
     """Genere un plan repas via Ollama, avec cache, retry, semaphore, validation."""
     inputs_hash = compute_inputs_hash(inputs)
 
@@ -103,7 +105,7 @@ async def generate_plan(
     try:
         plan = await _attempt_with_retry(
             prompt=_build_plan_prompt(inputs),
-            json_schema=MealPlan.model_json_schema(),
+            json_schema=FallbackMealPlan.model_json_schema(),
             parse=lambda raw: _validate_plan(raw, inputs),
             log_id=inputs_hash,
         )
@@ -210,13 +212,17 @@ async def _call_ollama_generate(prompt: str, json_schema: dict[str, Any] | None)
     return data.get("response", "")
 
 
-def _validate_plan(raw_response: str, inputs: PlanInputs) -> MealPlan:
+def _validate_plan(raw_response: str, inputs: PlanInputs) -> FallbackMealPlan:
     """Parse le JSON, valide via Pydantic, applique les regles metier."""
     try:
         parsed = json.loads(raw_response)
     except json.JSONDecodeError as exc:
         raise _PlanValidationError(f"JSON invalide : {exc}") from exc
-    plan = MealPlan.model_validate(parsed)
+    # Le LLM oublie parfois 'fallback' qui est requis par le schema. On le
+    # force a False sur le chemin success ; _build_fallback_plan le met a True.
+    if isinstance(parsed, dict):
+        parsed.setdefault("fallback", False)
+    plan = FallbackMealPlan.model_validate(parsed)
     _enforce_allergy_absence(plan, inputs.allergies)
     return plan
 
@@ -228,7 +234,7 @@ def _normalize(text_value: str) -> str:
     return stripped.casefold()
 
 
-def _enforce_allergy_absence(plan: MealPlan, allergies: list[str]) -> None:
+def _enforce_allergy_absence(plan: FallbackMealPlan, allergies: list[str]) -> None:
     """Rejette un plan si un ingredient contient un allergene en mot entier.
 
     Utilise un match a frontiere de mot (\\b) plutot que substring : evite
@@ -262,7 +268,7 @@ def _build_plan_prompt(inputs: PlanInputs) -> str:
     )
 
 
-def _lookup_cached_plan(db: Session, user_id: int, inputs_hash: str) -> MealPlan | None:
+def _lookup_cached_plan(db: Session, user_id: int, inputs_hash: str) -> FallbackMealPlan | None:
     """Recupere le dernier plan en cache (< 7 jours) pour ce inputs_hash.
 
     Filtre redondant sur user_id : le hash inclut deja user_id, mais l'expliciter
@@ -282,10 +288,10 @@ def _lookup_cached_plan(db: Session, user_id: int, inputs_hash: str) -> MealPlan
     ).fetchone()
     if row is None:
         return None
-    return MealPlan.model_validate(row.plan)
+    return FallbackMealPlan.model_validate(row.plan)
 
 
-def _persist_plan(db: Session, plan: MealPlan, inputs_hash: str, inputs: PlanInputs) -> None:
+def _persist_plan(db: Session, plan: FallbackMealPlan, inputs_hash: str, inputs: PlanInputs) -> None:
     """Insere une ligne meal_plans avec le plan complet et son inputs_hash.
 
     Flush sans commit : la decision de commit revient au caller (handler FastAPI),
@@ -312,17 +318,17 @@ def _build_fallback_plan(
     inputs_hash: str,
     db: Session,
     fallback_loader: Callable[[str, str], dict[str, Any] | None] | None,
-) -> MealPlan:
+) -> FallbackMealPlan:
     """Construit un plan en mode degrade : matrice statique ou squelette vide."""
     raw: dict[str, Any] | None = None
     if fallback_loader is not None:
         raw = fallback_loader(inputs.objective, inputs.diet_type or "")
 
     if raw is None:
-        raw = {"days": [], "total_calories": 0}
+        raw = {"days": []}
     raw["fallback"] = True
 
-    plan = MealPlan.model_validate(raw)
+    plan = FallbackMealPlan.model_validate(raw)
     _persist_plan(db, plan, inputs_hash, inputs)
     return plan
 

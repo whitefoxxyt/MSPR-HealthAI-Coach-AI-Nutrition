@@ -9,4 +9,5 @@ pydantic-settings==2.8.1
 transformers==4.51.3
 torch==2.7.0+cpu
 pyjwt==2.10.1
+cachetools==5.5.0
 pytest==8.3.4

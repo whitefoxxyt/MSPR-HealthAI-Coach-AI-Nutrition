@@ -72,7 +72,7 @@ async def test_generate_plan_with_real_ollama(
 
     assert plan.fallback is False
     assert len(plan.days) >= 1
-    assert plan.total_calories > 0
+    assert plan.days[0].meals[0].macros.calories > 0
 
 
 @pytest.mark.slow
@@ -83,8 +83,8 @@ async def test_generate_recommendation_with_real_ollama(
     monkeypatch.setattr(settings, "ollama_host", ollama_host)
     ctx = RecommendationContext(
         user_id=998,
-        imbalance=Imbalance.PROTEIN_LOW,
-        health_goal=HealthGoal.MUSCLE_GAIN,
+        imbalance=Imbalance.protein_low,
+        health_goal=HealthGoal.muscle_gain,
     )
 
     text_reco = await generate_recommendation(ctx, real_db_session)
