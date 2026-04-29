@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HealthGoal(str, Enum):
@@ -90,3 +90,36 @@ class MealDay(BaseModel):
 class FallbackMealPlan(BaseModel):
     fallback: bool
     days: list[MealDay]
+
+
+# LLM client : inputs / outputs (issue NUT-7).
+
+
+class Imbalance(str, Enum):
+    balanced = "balanced"
+    protein_low = "protein_low"
+    protein_high = "protein_high"
+    carbs_low = "carbs_low"
+    carbs_high = "carbs_high"
+    fat_low = "fat_low"
+    fat_high = "fat_high"
+    calories_low = "calories_low"
+    calories_high = "calories_high"
+
+
+# Inputs pour la generation de plan repas. allergies est triee dans
+# canonicalize_inputs avant calcul du hash.
+class PlanInputs(BaseModel):
+    user_id: int
+    objective: str
+    duration_days: int = 7
+    diet_type: str | None = None
+    allergies: list[str] = Field(default_factory=list)
+    budget_per_day: Decimal | None = None
+    calories_target: int | None = None
+
+
+class RecommendationContext(BaseModel):
+    user_id: int
+    imbalance: Imbalance
+    health_goal: HealthGoal
