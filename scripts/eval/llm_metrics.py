@@ -162,20 +162,25 @@ def _ingredient_contains_term(ingredient: str, term: str) -> bool:
     return bool(pattern.search(_normalize(ingredient)))
 
 
+def _plan_violates_terms(plan: FallbackMealPlan, terms: frozenset[str] | list[str]) -> bool:
+    """True des qu'un ingredient du plan matche un des termes (frontiere de mot)."""
+    return any(
+        _ingredient_contains_term(ing, term)
+        for day in plan.days
+        for meal in day.meals
+        for ing in meal.ingredients
+        for term in terms
+    )
+
+
 def check_plan_constraints(
     plan: FallbackMealPlan,
     spec: ConstraintSpec,
 ) -> ConstraintCheck:
     """Verifie qu'un plan respecte allergies + budget + regime."""
-    allergies_absent = True
-    if spec.allergies:
-        for day in plan.days:
-            for meal in day.meals:
-                for ing in meal.ingredients:
-                    for allergen in spec.allergies:
-                        if _ingredient_contains_term(ing, allergen):
-                            allergies_absent = False
-                            break
+    allergies_absent = not (
+        spec.allergies and _plan_violates_terms(plan, spec.allergies)
+    )
 
     budget_respected = True
     if spec.max_daily_budget_eur is not None:
@@ -185,16 +190,8 @@ def check_plan_constraints(
                 budget_respected = False
                 break
 
-    diet_respected = True
     banned = _DIET_BANNED.get(spec.diet_type or "", frozenset())
-    if banned:
-        for day in plan.days:
-            for meal in day.meals:
-                for ing in meal.ingredients:
-                    for term in banned:
-                        if _ingredient_contains_term(ing, term):
-                            diet_respected = False
-                            break
+    diet_respected = not (banned and _plan_violates_terms(plan, banned))
 
     return ConstraintCheck(
         allergies_absent=allergies_absent,

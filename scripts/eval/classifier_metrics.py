@@ -8,7 +8,13 @@ def top_k_accuracy(
     truths: list[str],
     k: int,
 ) -> float:
-    """Renvoie le ratio de samples ou la verite est dans le top-k de predictions."""
+    """Renvoie le ratio de samples ou la verite est dans le top-k de predictions.
+
+    Convention : sur une liste vide, renvoie 0.0 plutot que de lever, par
+    coherence avec json_validity_rate / fallback_rate / latency_percentiles.
+    """
+    if not truths:
+        return 0.0
     hits = sum(1 for preds, truth in zip(predictions, truths) if truth in preds[:k])
     return hits / len(truths)
 

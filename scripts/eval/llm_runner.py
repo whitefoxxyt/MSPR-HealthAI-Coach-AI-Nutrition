@@ -65,8 +65,6 @@ async def run_llm_eval(
     output_dir: Path,
 ) -> dict[str, Any]:
     """Renvoie un payload llm pour metrics.json."""
-    random.seed(seed)
-
     logger.info("llm : %d generations en conditions normales", n_generations)
     outcomes = await _run_generations(n_generations, with_constraints=False, seed=seed)
 

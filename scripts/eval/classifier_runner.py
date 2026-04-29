@@ -9,7 +9,6 @@ Necessite : transformers, datasets, torch (CPU), matplotlib, Pillow.
 from __future__ import annotations
 
 import logging
-import random
 from collections import Counter
 from io import BytesIO
 from pathlib import Path
@@ -36,16 +35,20 @@ def run_classifier_eval(
     seed: int,
     output_dir: Path,
 ) -> dict[str, Any]:
-    """Renvoie un payload {food101: ..., terrain: ...} pour metrics.json."""
-    random.seed(seed)
+    """Renvoie un payload {food101: ..., terrain: ...} pour metrics.json.
 
+    `seed` est conserve dans la signature publique pour la coherence avec
+    l'eval LLM mais n'est pas utilise : le streaming Food-101 est deterministe
+    et on prend les n_food101 premiers samples.
+    """
+    del seed
     classifier = _load_classifier()
     payload: dict[str, Any] = {}
 
-    food101_payload = _eval_food101(classifier, n_food101, output_dir, seed)
+    food101_payload = _eval_food101(classifier, n_food101, output_dir)
     payload["food101"] = food101_payload
 
-    terrain_payload = _eval_terrain(classifier, terrain_dir, output_dir)
+    terrain_payload = _eval_terrain(classifier, terrain_dir)
     if terrain_payload is not None:
         payload["terrain"] = terrain_payload
 
@@ -59,9 +62,14 @@ def _load_classifier() -> Any:
 
 
 def _eval_food101(
-    classifier: Any, n_samples: int, output_dir: Path, seed: int
+    classifier: Any, n_samples: int, output_dir: Path
 ) -> dict[str, Any]:
-    """Echantillonne n_samples du test split Food-101 et calcule les metriques."""
+    """Echantillonne n_samples du test split Food-101 et calcule les metriques.
+
+    On prend les `n_samples` premiers du split (deterministe, ordre du dataset
+    streaming) : suffisant pour evaluer le classifier sans charger les 25k
+    images, et reproductible sans avoir besoin de seed.
+    """
     from datasets import Image as HFImage
     from datasets import load_dataset
 
@@ -70,11 +78,8 @@ def _eval_food101(
     ds = ds.cast_column("image", HFImage(decode=False))
 
     samples: list[tuple[Image.Image, str]] = []
-    rng = random.Random(seed)
     label_feature = ds.features["label"]
 
-    # Reservoir-style sampling : on parcourt jusqu'a n_samples (suffisant pour
-    # le test split de 25k images, on ne shuffle pas pour rester reproductible).
     for sample in ds:
         try:
             raw: bytes = sample["image"]["bytes"]
@@ -86,7 +91,6 @@ def _eval_food101(
         if len(samples) >= n_samples:
             break
 
-    rng.shuffle(samples)
     logger.info("food101 : %d images echantillonnees", len(samples))
 
     top1_preds: list[str] = []
@@ -121,7 +125,7 @@ def _eval_food101(
 
 
 def _eval_terrain(
-    classifier: Any, terrain_dir: Path, output_dir: Path
+    classifier: Any, terrain_dir: Path
 ) -> dict[str, Any] | None:
     labels_csv = terrain_dir / "labels.csv"
     if not labels_csv.exists():
