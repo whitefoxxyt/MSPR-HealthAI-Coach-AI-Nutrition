@@ -34,6 +34,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./app:/app/app:ro
       - ./tests:/app/tests:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
       - ../MSPR-DB/migrations:/migrations:ro
     environment:
       MIGRATIONS_DIR: /migrations

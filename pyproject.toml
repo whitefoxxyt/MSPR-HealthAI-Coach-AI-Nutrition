@@ -1,9 +1,27 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "slow: tests requiring real external services (Ollama, HuggingFace inference, network).",
 ]
+# Cible : 80% global. L'enforcement (--cov-fail-under) sera reactive une fois
+# les phases 4-6 livrees ; pour l'instant, le harnais sert d'echafaudage.
 addopts = [
     "-ra",
     "--strict-markers",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
 ]

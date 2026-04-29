@@ -1,50 +1,151 @@
 from __future__ import annotations
 
-import sys
-import types
+import os
+import re
+from collections.abc import Callable, Generator
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
 
-import sqlalchemy
+import pytest
+import respx
+from jose import jwt
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
+from testcontainers.postgres import PostgresContainer
 
+MIGRATIONS_DIR = Path(os.environ.get("MIGRATIONS_DIR", "/migrations"))
+MIGRATION_PATTERN = re.compile(r"^V(\d+)__.*\.sql$")
+MAX_MIGRATION_VERSION = 9  # AC issue 23 : V1 a V9
 
-def _stub_transformers_pipeline(*_args, **_kwargs):
-    raise RuntimeError("transformers.pipeline stub : non utilisable en tests")
+TEST_AUTH_SECRET = "test-secret-not-for-prod-do-not-use"
+TEST_OLLAMA_HOST = "http://ollama-test:11434"
 
-
-def _stub_pil_image_open(*_args, **_kwargs):
-    raise RuntimeError("PIL.Image.open stub : non utilisable en tests")
-
-
-def _install_stubs() -> None:
-    """Stubs charges avant l'import de app.main pour eviter les deps lourdes
-    (transformers, torch, PIL, psycopg2) dans les tests d'integration de routing."""
-    if "transformers" not in sys.modules:
-        transformers = types.ModuleType("transformers")
-        transformers.pipeline = _stub_transformers_pipeline
-        sys.modules["transformers"] = transformers
-
-    if "PIL" not in sys.modules:
-        pil = types.ModuleType("PIL")
-        pil_image = types.ModuleType("PIL.Image")
-        pil_image.open = _stub_pil_image_open
-        pil.Image = pil_image
-        sys.modules["PIL"] = pil
-        sys.modules["PIL.Image"] = pil_image
-
-
-_install_stubs()
+# Tables truncatees avant chaque test (isolation function-scope).
+# nutrition_entries vient de l'ETL, le reste est cree par V8/V9.
+_TRUNCATE_TABLES = [
+    "meal_analyses",
+    "meal_plans",
+    "nutrition_goals",
+    "nutrition_entries",
+]
 
 
-# Force un engine SQLite en memoire pour les tests : evite la dep psycopg2
-# qui n'a pas de wheel pour Python 3.14 (en local). On force l'import de
-# app.main sous patch puis on restaure create_engine pour eviter la fuite
-# globale du monkeypatch sur le reste du process de test.
-_real_create_engine = sqlalchemy.create_engine
+def _ordered_migrations() -> list[Path]:
+    files: list[tuple[int, Path]] = []
+    for path in MIGRATIONS_DIR.iterdir():
+        match = MIGRATION_PATTERN.match(path.name)
+        if match:
+            version = int(match.group(1))
+            if version <= MAX_MIGRATION_VERSION:
+                files.append((version, path))
+    return [p for _, p in sorted(files)]
 
 
-def _fake_create_engine(_url, *_args, **_kwargs):
-    return _real_create_engine("sqlite:///:memory:")
+@pytest.fixture(scope="session")
+def pg_container() -> Generator[PostgresContainer, None, None]:
+    """Spawn un PostgreSQL 17 ephemere et joue les migrations V1 a V9."""
+    container = PostgresContainer("postgres:17-alpine", driver="psycopg2")
+    container.start()
+    try:
+        engine = create_engine(container.get_connection_url(), pool_pre_ping=True)
+        with engine.begin() as conn:
+            for migration in _ordered_migrations():
+                conn.execute(text(migration.read_text()))
+        engine.dispose()
+        yield container
+    finally:
+        container.stop()
 
 
-sqlalchemy.create_engine = _fake_create_engine
-import app.main  # noqa: E402, F401  -- declenche la creation de l'engine sous patch
-sqlalchemy.create_engine = _real_create_engine
+@pytest.fixture(scope="session")
+def pg_engine(pg_container: PostgresContainer) -> Generator[Engine, None, None]:
+    engine = create_engine(pg_container.get_connection_url(), pool_pre_ping=True)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture
+def db_session(pg_engine: Engine) -> Generator[Session, None, None]:
+    """Session SQLAlchemy isolee : truncate des tables MSPR2 avant chaque test."""
+    SessionLocal = sessionmaker(bind=pg_engine)
+    session = SessionLocal()
+    try:
+        tables = ", ".join(_TRUNCATE_TABLES)
+        session.execute(text(f"TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE"))
+        session.commit()
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def mock_ollama() -> Generator[respx.MockRouter, None, None]:
+    """Intercepte les appels httpx vers Ollama via respx.
+
+    Reponse JSON par defaut sur POST /api/generate ; le test peut surcharger
+    via mock_ollama.post(...).respond(...) avant l'appel.
+    """
+    with respx.mock(assert_all_called=False) as router:
+        router.post(re.compile(r".*/api/generate$")).respond(
+            200,
+            json={"response": "{}", "done": True},
+        )
+        router.get(re.compile(r".*/api/tags$")).respond(
+            200,
+            json={"models": [{"name": "gemma3:4b"}]},
+        )
+        yield router
+
+
+@pytest.fixture
+def mock_classifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[..., list[dict[str, Any]]]:
+    """Patch food_classifier._get_classifier pour retourner un fake deterministe.
+
+    Le fake renvoie pizza (0.85) puis lasagna (0.07), tronque a top_k.
+    """
+    from app.services import food_classifier
+
+    def fake_pipeline(image: Any, top_k: int = 5) -> list[dict[str, Any]]:
+        results = [
+            {"label": "pizza", "score": 0.85},
+            {"label": "lasagna", "score": 0.07},
+            {"label": "spaghetti_bolognese", "score": 0.03},
+        ]
+        return results[:top_k]
+
+    monkeypatch.setattr(food_classifier, "_get_classifier", lambda: fake_pipeline)
+    return fake_pipeline
+
+
+@pytest.fixture
+def valid_jwt() -> Callable[..., str]:
+    """Fabrique un JWT HS256 signe avec TEST_AUTH_SECRET.
+
+    valid_jwt(user_id=42, email="x@y.z", expires_in=3600) -> str
+    """
+
+    def _make(
+        user_id: int = 1,
+        email: str | None = "test@example.com",
+        expires_in: int = 3600,
+        extra_claims: dict[str, Any] | None = None,
+    ) -> str:
+        now = datetime.now(timezone.utc)
+        payload: dict[str, Any] = {
+            "sub": str(user_id),
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(seconds=expires_in)).timestamp()),
+        }
+        if email is not None:
+            payload["email"] = email
+        if extra_claims:
+            payload.update(extra_claims)
+        return jwt.encode(payload, TEST_AUTH_SECRET, algorithm="HS256")
+
+    return _make
