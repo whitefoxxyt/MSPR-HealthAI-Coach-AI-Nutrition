@@ -63,3 +63,30 @@ class NutritionGoalResponse(NutritionGoalRequest):
     user_id: int
 
     model_config = {"from_attributes": True}
+
+
+# Plans repas fallback (issue NUT-8). Cf. POST /api/v1/generate-meal-plan.
+
+class MealMacros(BaseModel):
+    calories: int
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+
+
+class Meal(BaseModel):
+    name: str
+    macros: MealMacros
+    ingredients: list[str]
+    est_budget_eur: float
+    prep_time_min: int
+
+
+class MealDay(BaseModel):
+    day: int
+    meals: list[Meal]
+
+
+class FallbackMealPlan(BaseModel):
+    fallback: bool
+    days: list[MealDay]
