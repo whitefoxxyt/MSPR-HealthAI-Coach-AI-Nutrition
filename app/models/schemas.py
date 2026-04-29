@@ -1,7 +1,17 @@
+from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 from pydantic import BaseModel
+
+
+class HealthGoal(str, Enum):
+    weight_loss = "weight_loss"
+    muscle_gain = "muscle_gain"
+    balance = "balance"
+    sport_performance = "sport_performance"
 
 
 # MealAnalysis
@@ -40,6 +50,7 @@ class MealPlanResponse(BaseModel):
 # NutritionGoal
 
 class NutritionGoalRequest(BaseModel):
+    health_goal: HealthGoal | None = None
     calories_target: int | None = None
     protein_g: Decimal | None = None
     carbs_g: Decimal | None = None
