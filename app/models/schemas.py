@@ -28,25 +28,6 @@ class MealAnalysisResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# MealPlan
-
-class MealPlanRequest(BaseModel):
-    user_id: int
-    objective: str | None = None
-    constraints: dict = {}
-
-
-class MealPlanResponse(BaseModel):
-    id: int
-    user_id: int
-    plan: dict
-    objective: str | None
-    constraints: dict
-    generated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 # NutritionGoal
 
 class NutritionGoalRequest(BaseModel):
@@ -88,6 +69,30 @@ class MealDay(BaseModel):
 
 
 class FallbackMealPlan(BaseModel):
+    fallback: bool
+    days: list[MealDay]
+
+
+# Generate-meal-plan : contrat d'API (issue NUT-9).
+
+
+class DietType(str, Enum):
+    omnivore = "omnivore"
+    vegetarien = "vegetarien"
+    vegan = "vegan"
+    sans_gluten = "sans_gluten"
+
+
+class MealPlanRequest(BaseModel):
+    health_goal: HealthGoal | None = None
+    allergies: list[str] = []
+    budget_eur_per_day: float | None = Field(default=None, ge=0)
+    diet_type: DietType
+    duration_days: int = Field(default=7, ge=1, le=30)
+
+
+class MealPlanResponse(BaseModel):
+    plan_id: int
     fallback: bool
     days: list[MealDay]
 

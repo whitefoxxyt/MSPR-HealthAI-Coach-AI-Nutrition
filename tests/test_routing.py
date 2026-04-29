@@ -38,6 +38,8 @@ def test_openapi_lists_versioned_route():
     paths = response.json()["paths"]
     assert "/api/v1/analyze-meal" in paths
     assert "/api/v1/nutrition-goals/me" in paths
+    assert "/api/v1/generate-meal-plan" in paths
     assert "/health" in paths
     assert "/analyze-meal" not in paths
     assert "/nutrition-goals/me" not in paths
+    assert "/generate-meal-plan" not in paths
