@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -16,7 +14,7 @@ from app.services import jwt_decoder, meal_plan_orchestrator
 router = APIRouter(tags=["meal-plan"])
 
 
-def _auth(authorization: Optional[str]) -> tuple[int, str]:
+def _auth(authorization: str | None) -> tuple[int, str]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header invalide.")
     token = authorization.removeprefix("Bearer ")
@@ -33,7 +31,7 @@ def _auth(authorization: Optional[str]) -> tuple[int, str]:
 async def generate_meal_plan(
     request: Request,  # requis par SlowAPI pour key_func
     payload: MealPlanRequest,
-    authorization: Optional[str] = Header(default=None),
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> MealPlanResponse:
     user_id, token = _auth(authorization)

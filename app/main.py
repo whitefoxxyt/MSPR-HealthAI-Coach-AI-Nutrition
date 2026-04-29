@@ -1,6 +1,6 @@
 from fastapi import FastAPI
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.extension import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.limiter import limiter

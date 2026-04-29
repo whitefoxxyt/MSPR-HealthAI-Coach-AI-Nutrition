@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from slowapi import Limiter
 
 from app.services import jwt_decoder
@@ -16,7 +16,7 @@ def _user_key(request: Request) -> str:
     if auth.startswith("Bearer "):
         try:
             identity = jwt_decoder.decode(auth.removeprefix("Bearer "))
-        except Exception:
+        except HTTPException:
             pass
         else:
             return f"user:{identity.user_id}"
