@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     db_password: str = "password"
     ollama_host: str = "http://ollama:11434"
     better_auth_secret: str = ""
+    auth_api_url: str = "http://mspr-healthai-auth:3000"
 
     @property
     def database_url(self) -> str:
