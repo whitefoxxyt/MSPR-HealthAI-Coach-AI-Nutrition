@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def save_confusion_matrix_png(
+    matrix: list[list[int]],
+    labels: list[str],
+    out_path: Path,
+    title: str = "Matrice de confusion",
+) -> None:
+    """Sauve la matrice de confusion en PNG (matplotlib).
+
+    Garde la dependance matplotlib hors du module metrics pour qu'il reste
+    importable depuis l'environnement de test sans matplotlib installe.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    arr = np.array(matrix)
+    fig, ax = plt.subplots(
+        figsize=(max(8, len(labels) * 0.4), max(6, len(labels) * 0.4))
+    )
+    im = ax.imshow(arr, cmap="Blues", aspect="auto")
+    ax.set_xticks(range(len(labels)))
+    ax.set_yticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=90, fontsize=6)
+    ax.set_yticklabels(labels, fontsize=6)
+    ax.set_xlabel("Predit")
+    ax.set_ylabel("Verite")
+    ax.set_title(title)
+    fig.colorbar(im, ax=ax)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
+def save_latency_distribution_png(
+    latencies_ms: list[float],
+    out_path: Path,
+    title: str = "Distribution latence LLM",
+) -> None:
+    """Histogramme de la distribution latence LLM."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.hist(latencies_ms, bins=30, color="#3b82f6", edgecolor="white")
+    ax.set_xlabel("Latence (ms)")
+    ax.set_ylabel("Nombre d'appels")
+    ax.set_title(title)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)

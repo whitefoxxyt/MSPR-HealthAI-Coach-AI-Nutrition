@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install ruff
+        run: pip install ruff==0.8.4
+
+      - name: Ruff check
+        run: ruff check .
+
+  test:
+    name: Tests + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AI-Nutrition
+        uses: actions/checkout@v4
+        with:
+          path: MSPR-AI-Nutrition
+
+      - name: Checkout MSPR-DB (migrations)
+        uses: actions/checkout@v4
+        with:
+          repository: whitefoxxyt/MSPR-HealthAI-Coach-BDD
+          path: MSPR-DB
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            MSPR-AI-Nutrition/requirements.txt
+            MSPR-AI-Nutrition/requirements-dev.txt
+
+      - name: Install dependencies
+        working-directory: MSPR-AI-Nutrition
+        run: |
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+            -r requirements.txt -r requirements-dev.txt
+
+      - name: Run pytest (excluding slow)
+        working-directory: MSPR-AI-Nutrition
+        env:
+          MIGRATIONS_DIR: ${{ github.workspace }}/MSPR-DB/migrations
+        run: pytest -m "not slow"
+
+      - name: Upload coverage HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: MSPR-AI-Nutrition/htmlcov/

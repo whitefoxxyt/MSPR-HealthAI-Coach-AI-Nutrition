@@ -9,6 +9,9 @@ def _label_to_keywords(label: str) -> list[str]:
     return label.replace("_", " ").lower().split()
 
 
+# Note : la colonne nutrition_entries.user_id a ete supprimee par MSPR-DB
+# V7__drop_users_table.sql (drop de la table users + des FK associees). Les
+# requetes ci-dessous ne filtrent donc plus sur user_id.
 def lookup_nutrition(
     label: str, db: Session
 ) -> dict | None:
@@ -28,7 +31,7 @@ def lookup_nutrition(
         text(
             "SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
             "FROM nutrition_entries "
-            "WHERE user_id IS NULL AND LOWER(food_name) = LOWER(:name) "
+            "WHERE LOWER(food_name) = LOWER(:name) "
             "LIMIT 1"
         ),
         {"name": normalized},
@@ -44,10 +47,10 @@ def lookup_nutrition(
             params = {f"kw{i}": f"%{kw}%" for i, kw in enumerate(keywords)}
             row = db.execute(
                 text(
-                    f"SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
-                    f"FROM nutrition_entries "
-                    f"WHERE user_id IS NULL AND {conditions} "
-                    f"LIMIT 1"
+                    "SELECT food_name, calories, protein_g, carbs_g, fat_g, fiber_g "
+                    "FROM nutrition_entries "
+                    f"WHERE {conditions} "
+                    "LIMIT 1"
                 ),
                 params,
             ).fetchone()

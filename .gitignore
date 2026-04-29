@@ -1,9 +1,9 @@
-.env
 __pycache__/
 *.pyc
-*.pyo
 .pytest_cache/
+.venv/
+.venv*/
 .ruff_cache/
-.claude/
-tests/
-*.md
+.coverage
+htmlcov/
+.env
