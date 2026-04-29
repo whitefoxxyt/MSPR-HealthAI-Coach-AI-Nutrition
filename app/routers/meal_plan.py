@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.limiter import limiter
-from app.models.schemas import MealPlanRequest, MealPlanResponse
-from app.services import jwt_decoder, meal_plan_orchestrator
+from app.models.schemas import MealPlanRequest, MealPlanResponse, PaginatedPlansResponse
+from app.services import jwt_decoder, meal_plan_history, meal_plan_orchestrator
 
 # Note : pas de `from __future__ import annotations` ici. Slowapi enveloppe la
 # fonction et FastAPI doit pouvoir resoudre les types Pydantic au moment de
@@ -36,3 +36,14 @@ async def generate_meal_plan(
 ) -> MealPlanResponse:
     user_id, token = _auth(authorization)
     return await meal_plan_orchestrator.generate(user_id, payload, token, db)
+
+
+@router.get("/meal-plans/me", response_model=PaginatedPlansResponse)
+def list_my_meal_plans(
+    authorization: str | None = Header(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> PaginatedPlansResponse:
+    user_id, _ = _auth(authorization)
+    return meal_plan_history.list_user_plans(user_id, limit, offset, db)
