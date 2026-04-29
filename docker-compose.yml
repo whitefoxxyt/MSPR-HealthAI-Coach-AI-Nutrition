@@ -21,6 +21,24 @@ services:
       - internal
     entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull gemma3:4b && wait"]
 
+  # Service de tests (lance pytest dans un container, testcontainers spawne PG via le socket Docker host)
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: mspr-ai-nutrition-tests
+    profiles: ["test"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./app:/app/app:ro
+      - ./tests:/app/tests:ro
+      - ../MSPR-DB/migrations:/migrations:ro
+    environment:
+      MIGRATIONS_DIR: /migrations
+      # testcontainers monte le socket host : les containers PG spawned sont accessibles
+      # via le reseau bridge default du host. ryuk (cleanup) reste actif.
+    network_mode: host
+
 networks:
   mspr_data_network:
     external: true  # créé par le docker-compose.yml racine (MSPR/)

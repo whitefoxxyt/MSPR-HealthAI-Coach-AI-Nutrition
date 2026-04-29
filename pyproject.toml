@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "slow: tests requiring real external services (Ollama, HuggingFace inference, network).",
+]
+addopts = [
+    "-ra",
+    "--strict-markers",
+]
