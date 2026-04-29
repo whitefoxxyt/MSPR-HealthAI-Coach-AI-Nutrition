@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
+from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 
@@ -53,9 +56,13 @@ DAIRY_SKIP_MARKERS = [
 
 EGG_KEYWORDS = ["oeuf", "oeufs"]
 
+# Le miel n'est pas vegan : pas inclus dans DAIRY_KEYWORDS pour ne pas polluer
+# d'autres regimes (omnivore/vegetarien/sans_gluten l'autorisent).
+HONEY_KEYWORDS = ["miel"]
+
 
 def _contains_any(
-    ingredient: str, keywords: list[str], skip_markers: list[str] = ()
+    ingredient: str, keywords: Sequence[str], skip_markers: Sequence[str] = ()
 ) -> str | None:
     """Cherche un mot interdit en respectant les frontieres de mot.
 
@@ -150,3 +157,34 @@ def test_vegan_excludes_animal_products(health_goal: str):
         assert dairy_hit is None, f"vegan contient produit laitier via '{ing}' (mot : {dairy_hit})"
         egg_hit = _contains_any(ing, EGG_KEYWORDS)
         assert egg_hit is None, f"vegan contient oeuf via '{ing}' (mot : {egg_hit})"
+        honey_hit = _contains_any(ing, HONEY_KEYWORDS)
+        assert honey_hit is None, f"vegan contient miel via '{ing}' (mot : {honey_hit})"
+
+
+def test_committed_json_matches_generator():
+    """Garde-fou : le JSON committe doit etre la sortie exacte du script.
+
+    Si le JSON est edite a la main sans relancer scripts/generate_fallback_plans.py,
+    ce test echoue pour eviter une derive silencieuse.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    json_path = repo_root / "app" / "data" / "fallback_plans.json"
+
+    # Import local pour ne pas charger le script a la collection.
+    import sys
+    sys.path.insert(0, str(repo_root / "scripts"))
+    try:
+        import generate_fallback_plans as gen
+    finally:
+        sys.path.pop(0)
+
+    expected = {
+        f"{hg}_{dt}": gen.build_plan(hg, dt)
+        for hg in gen.HEALTH_GOALS
+        for dt in gen.DIET_TYPES
+    }
+    committed = json.loads(json_path.read_text(encoding="utf-8"))
+    assert committed == expected, (
+        "fallback_plans.json desynchronise du script generate_fallback_plans.py. "
+        "Relancer : python scripts/generate_fallback_plans.py"
+    )
