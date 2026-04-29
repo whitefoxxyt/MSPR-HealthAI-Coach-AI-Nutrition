@@ -16,16 +16,42 @@ class HealthGoal(str, Enum):
 
 # MealAnalysis
 
-class MealAnalysisResponse(BaseModel):
+class MealAnalysisItem(BaseModel):
     id: int
-    user_id: int
-    photo_url: str | None
     detected_foods: list
     macros: dict
-    confidence_scores: dict
+    recommendations: list[str]
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PaginatedAnalysesResponse(BaseModel):
+    items: list[MealAnalysisItem]
+    total: int
+    limit: int
+    offset: int
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "items": [
+                    {
+                        "id": 42,
+                        "detected_foods": [
+                            {"label": "pizza", "confidence": 0.85, "nutrition": {}}
+                        ],
+                        "macros": {"calories": 1300, "protein_g": 30, "carbs_g": 160, "fat_g": 50},
+                        "recommendations": ["Reduis la portion au prochain repas."],
+                        "created_at": "2026-04-29T10:15:00",
+                    }
+                ],
+                "total": 137,
+                "limit": 20,
+                "offset": 0,
+            }
+        }
+    }
 
 
 # NutritionGoal

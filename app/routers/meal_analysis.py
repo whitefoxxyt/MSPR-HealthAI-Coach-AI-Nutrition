@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services import jwt_decoder
+from app.models.schemas import PaginatedAnalysesResponse
+from app.services import jwt_decoder, meal_analysis_history
 from app.services.meal_analysis_orchestrator import analyze_meal as orchestrate
 
 router = APIRouter()
@@ -40,3 +41,14 @@ async def analyze_meal(
 
     user_id = _user_id_from_auth(authorization)
     return await orchestrate(image_bytes, user_id, db)
+
+
+@router.get("/meal-analyses/me", response_model=PaginatedAnalysesResponse)
+def list_my_meal_analyses(
+    authorization: str | None = Header(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> PaginatedAnalysesResponse:
+    user_id = _user_id_from_auth(authorization)
+    return meal_analysis_history.list_user_analyses(user_id, limit, offset, db)
