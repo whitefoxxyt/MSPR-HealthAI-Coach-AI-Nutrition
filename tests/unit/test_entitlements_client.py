@@ -34,7 +34,7 @@ async def test_returns_tier_free_when_auth_responds_with_free() -> None:
     assert isinstance(result, Entitlements)
     assert result.tier == "free"
     assert result.expires_at is None
-    assert result.features == []
+    assert result.features == ()
 
 
 async def test_second_call_with_same_user_id_hits_cache() -> None:
@@ -84,7 +84,7 @@ async def test_timeout_without_prior_cache_degrades_to_free() -> None:
 
     assert result.tier == "free"
     assert result.expires_at is None
-    assert result.features == []
+    assert result.features == ()
 
 
 async def test_timeout_returns_stale_cache_when_available() -> None:
@@ -106,7 +106,7 @@ async def test_timeout_returns_stale_cache_when_available() -> None:
         result = await get_entitlements(user_id="u-stale", jwt="jwt-token")
 
     assert result.tier == "premium_plus"
-    assert result.features == ["a"]
+    assert result.features == ("a",)
 
 
 async def test_unknown_tier_value_degrades_to_free() -> None:
@@ -182,4 +182,4 @@ async def test_returns_tier_premium_with_features_and_expiry() -> None:
 
     assert result.tier == "premium"
     assert result.expires_at == datetime(2026, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
-    assert result.features == ["meal_plans_unlimited", "no_cache"]
+    assert result.features == ("meal_plans_unlimited", "no_cache")
