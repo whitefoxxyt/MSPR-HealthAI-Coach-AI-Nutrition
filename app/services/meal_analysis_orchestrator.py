@@ -133,16 +133,22 @@ def _resolve_health_goal(goal: NutritionGoal | None) -> HealthGoal:
 
 
 def _lookup_cached_recommendations(db: Session, hash_value: str) -> list[str] | None:
-    """Cache global : si une analyse < 30 jours partage le meme hash, on la reutilise."""
+    """Cache global : si une analyse < TTL jours partage le meme hash, on la reutilise.
+
+    Race condition assumee : deux requetes concurrentes avec le meme hash peuvent
+    declencher chacune un appel LLM avant que la premiere n'ecrive en BDD. La
+    seconde ecrasera juste l'entree avec une valeur equivalente. Volume actuel
+    trop faible pour justifier un INSERT ON CONFLICT.
+    """
     row = db.execute(
         text(
             "SELECT recommendations FROM meal_analyses "
             "WHERE recommendations_hash = :h "
-            f"AND created_at > NOW() - INTERVAL '{_CACHE_TTL_DAYS} days' "
+            "AND created_at > NOW() - make_interval(days => :ttl_days) "
             "ORDER BY created_at DESC "
             "LIMIT 1"
         ),
-        {"h": hash_value},
+        {"h": hash_value, "ttl_days": _CACHE_TTL_DAYS},
     ).fetchone()
     if row is None:
         return None
@@ -155,8 +161,12 @@ async def _generate_recommendations(
     health_goal: HealthGoal,
     db: Session,
 ) -> tuple[list[str], bool]:
-    """Appelle generate_recommendation pour chaque desequilibre. fallback_used =
-    True si au moins un appel a echoue et a active la matrice statique."""
+    """Appelle generate_recommendation pour chaque desequilibre.
+
+    fallback_used = True si AU MOINS UN appel a echoue et a active la matrice
+    statique. La liste retournee peut donc melanger des phrases LLM et matrice
+    dans ce cas ; le client n'a pas le detail granulaire.
+    """
     fallback_used = False
 
     def _matrix_fallback(imb: Imbalance, goal: HealthGoal) -> str:
@@ -171,12 +181,13 @@ async def _generate_recommendations(
             return matrix.GENERIC_FALLBACK
         return matrix.get_recommendation(mat_imb, mat_goal)
 
-    recommendations: list[str] = []
-    for kind in imbalances:
+    async def _one(kind: Imbalance) -> str:
         ctx = RecommendationContext(
             user_id=user_id, imbalance=kind, health_goal=health_goal
         )
-        recommendations.append(
-            await llm_client.generate_recommendation(ctx, db, fallback=_matrix_fallback)
-        )
-    return recommendations, fallback_used
+        return await llm_client.generate_recommendation(ctx, db, fallback=_matrix_fallback)
+
+    # Parallelise les appels LLM ; le semaphore d'llm_client plafonne deja la
+    # charge Ollama (max 2 inferences simultanees).
+    recommendations = await asyncio.gather(*(_one(k) for k in imbalances))
+    return list(recommendations), fallback_used
