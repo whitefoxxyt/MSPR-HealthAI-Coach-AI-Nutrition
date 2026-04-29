@@ -21,6 +21,10 @@ class MealAnalysis(Base):
     detected_foods = Column(JSONB, nullable=False, server_default=text("'[]'"))
     macros = Column(JSONB, nullable=False, server_default=text("'{}'"))
     confidence_scores = Column(JSONB, nullable=False, server_default=text("'{}'"))
+    # Recommandations textuelles : LLM Ollama avec fallback matrice statique (V9).
+    recommendations = Column(JSONB, nullable=False, server_default=text("'[]'"))
+    # Cle de cache (top_food_label, health_goal, imbalances). 30 jours TTL (V10).
+    recommendations_hash = Column(String(64))
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
