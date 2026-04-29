@@ -1,3 +1,6 @@
 -r requirements.txt
 pytest==8.3.5
 pytest-asyncio==0.25.0
+pytest-cov==6.0.0
+respx==0.21.1
+testcontainers[postgresql]==4.9.0
