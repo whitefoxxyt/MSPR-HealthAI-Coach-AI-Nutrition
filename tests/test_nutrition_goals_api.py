@@ -1,21 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Generator
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from jose import jwt
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.session import get_db
 from app.main import app
+from tests.conftest import TEST_AUTH_SECRET
 
 
 @pytest.fixture(autouse=True)
-def _set_secret(monkeypatch: pytest.MonkeyPatch, db_session: Session) -> None:
+def _set_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     """Aligne le secret JWT du service sur celui de la fixture valid_jwt."""
-    from tests.conftest import TEST_AUTH_SECRET
-
     monkeypatch.setattr(settings, "better_auth_secret", TEST_AUTH_SECRET)
 
 
@@ -200,6 +201,38 @@ def test_invalid_jwt_returns_401(client: TestClient) -> None:
     response = client.get(
         "/api/v1/nutrition-goals/me",
         headers={"Authorization": "Bearer not-a-real-jwt"},
+    )
+    assert response.status_code == 401
+
+
+def test_expired_jwt_returns_401(client: TestClient) -> None:
+    past = datetime.now(tz=timezone.utc) - timedelta(hours=1)
+    expired = jwt.encode(
+        {"sub": "1", "iat": int(past.timestamp()), "exp": int(past.timestamp())},
+        TEST_AUTH_SECRET,
+        algorithm="HS256",
+    )
+    response = client.get(
+        "/api/v1/nutrition-goals/me",
+        headers={"Authorization": f"Bearer {expired}"},
+    )
+    assert response.status_code == 401
+
+
+def test_jwt_with_non_numeric_sub_returns_401(client: TestClient) -> None:
+    now = datetime.now(tz=timezone.utc)
+    token = jwt.encode(
+        {
+            "sub": "uuid-not-an-int",
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(hours=1)).timestamp()),
+        },
+        TEST_AUTH_SECRET,
+        algorithm="HS256",
+    )
+    response = client.get(
+        "/api/v1/nutrition-goals/me",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 401
 

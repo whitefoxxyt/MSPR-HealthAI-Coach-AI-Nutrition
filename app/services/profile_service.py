@@ -14,12 +14,12 @@ def upsert_profile(
     user_id: int, payload: NutritionGoalRequest, db: Session
 ) -> NutritionGoal:
     profile = get_profile(user_id, db)
-    fields = payload.model_dump(exclude_unset=False)
+    fields = _normalize(payload.model_dump())
     if profile is None:
-        profile = NutritionGoal(user_id=user_id, **_normalize(fields))
+        profile = NutritionGoal(user_id=user_id, **fields)
         db.add(profile)
     else:
-        for key, value in _normalize(fields).items():
+        for key, value in fields.items():
             setattr(profile, key, value)
     db.commit()
     db.refresh(profile)
@@ -31,5 +31,5 @@ def _normalize(fields: dict) -> dict:
     # mais on stocke la valeur de l'enum (str) dans la colonne VARCHAR(30).
     health_goal = fields.get("health_goal")
     if health_goal is not None and hasattr(health_goal, "value"):
-        fields["health_goal"] = health_goal.value
+        return {**fields, "health_goal": health_goal.value}
     return fields
