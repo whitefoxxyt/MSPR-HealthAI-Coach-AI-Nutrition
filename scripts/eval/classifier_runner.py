@@ -45,13 +45,8 @@ def run_classifier_eval(
     classifier = _load_classifier()
     payload: dict[str, Any] = {}
 
-    food101_payload = _eval_food101(classifier, n_food101, output_dir)
-    payload["food101"] = food101_payload
-
-    terrain_payload = _eval_terrain(classifier, terrain_dir)
-    if terrain_payload is not None:
-        payload["terrain"] = terrain_payload
-
+    payload["food101"] = _eval_food101(classifier, n_food101, output_dir)
+    payload["terrain"] = _eval_terrain(classifier, terrain_dir)
     return payload
 
 
@@ -61,9 +56,7 @@ def _load_classifier() -> Any:
     return pipeline("image-classification", model=_MODEL_ID)
 
 
-def _eval_food101(
-    classifier: Any, n_samples: int, output_dir: Path
-) -> dict[str, Any]:
+def _eval_food101(classifier: Any, n_samples: int, output_dir: Path) -> dict[str, Any]:
     """Echantillonne n_samples du test split Food-101 et calcule les metriques.
 
     On prend les `n_samples` premiers du split (deterministe, ordre du dataset
@@ -124,9 +117,15 @@ def _eval_food101(
     }
 
 
-def _eval_terrain(
-    classifier: Any, terrain_dir: Path
-) -> dict[str, Any] | None:
+_EMPTY_TERRAIN_PAYLOAD: dict[str, Any] = {
+    "n_samples": 0,
+    "top1_accuracy": 0.0,
+    "top5_accuracy": 0.0,
+    "unknown_rate": 0.0,
+}
+
+
+def _eval_terrain(classifier: Any, terrain_dir: Path) -> dict[str, Any]:
     labels_csv = terrain_dir / "labels.csv"
     if not labels_csv.exists():
         logger.warning(
@@ -135,18 +134,26 @@ def _eval_terrain(
             labels_csv,
             terrain_dir,
         )
-        return None
+        return dict(_EMPTY_TERRAIN_PAYLOAD)
 
     samples = load_terrain_labels(labels_csv)
     if not samples:
         logger.warning("terrain : %s est vide", labels_csv)
-        return None
+        return dict(_EMPTY_TERRAIN_PAYLOAD)
 
+    images_dir = terrain_dir / "images"
+    n_samples = len(samples)
+    n_unknown = 0
     top1_preds: list[str] = []
     top5_preds: list[list[str]] = []
     truths: list[str] = []
     for sample in samples:
-        img_path = terrain_dir / sample.filename
+        if sample.label == "unknown":
+            # Plat hors-distribution Food-101 : compte dans unknown_rate
+            # mais n'est pas envoye au classifier.
+            n_unknown += 1
+            continue
+        img_path = images_dir / sample.filename
         if not img_path.exists():
             logger.warning("terrain : image %s manquante, ignoree", img_path)
             continue
@@ -157,15 +164,20 @@ def _eval_terrain(
         top5_preds.append(top5)
         truths.append(sample.label)
 
+    unknown_rate = n_unknown / n_samples if n_samples else 0.0
     if not truths:
-        return None
+        return {
+            "n_samples": n_samples,
+            "top1_accuracy": 0.0,
+            "top5_accuracy": 0.0,
+            "unknown_rate": unknown_rate,
+        }
 
     top1_acc = top_k_accuracy([[p] for p in top1_preds], truths, k=1)
     top5_acc = top_k_accuracy(top5_preds, truths, k=5)
-    metrics = per_class_metrics(top1_preds, truths)
     return {
-        "n_samples": len(truths),
+        "n_samples": n_samples,
         "top1_accuracy": top1_acc,
         "top5_accuracy": top5_acc,
-        "per_class": metrics,
+        "unknown_rate": unknown_rate,
     }
