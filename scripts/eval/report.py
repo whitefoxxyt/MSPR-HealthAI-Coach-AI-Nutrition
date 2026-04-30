@@ -71,7 +71,12 @@ def _render_classifier_section(data: dict[str, Any]) -> list[str]:
         )
         out.append("")
 
-    if food101 and terrain and terrain.get("n_samples", 0) > 0:
+    if (
+        food101
+        and terrain
+        and terrain.get("n_samples", 0) > 0
+        and terrain.get("unknown_rate", 0.0) < 1.0
+    ):
         out.append("### Comparaison Food-101 vs terrain")
         out.append("")
         delta_top1 = food101.get("top1_accuracy", 0.0) - terrain.get(

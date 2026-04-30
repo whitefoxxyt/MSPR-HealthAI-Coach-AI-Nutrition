@@ -4,6 +4,8 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
+UNKNOWN_LABEL = "unknown"
+
 
 @dataclass(frozen=True)
 class TerrainSample:

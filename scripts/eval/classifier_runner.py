@@ -22,11 +22,18 @@ from scripts.eval.classifier_metrics import (
     top_k_accuracy,
 )
 from scripts.eval.plotting import save_confusion_matrix_png
-from scripts.eval.terrain import load_terrain_labels
+from scripts.eval.terrain import UNKNOWN_LABEL, load_terrain_labels
 
 logger = logging.getLogger(__name__)
 
 _MODEL_ID = "nateraw/food"
+
+_EMPTY_TERRAIN_PAYLOAD: dict[str, Any] = {
+    "n_samples": 0,
+    "top1_accuracy": 0.0,
+    "top5_accuracy": 0.0,
+    "unknown_rate": 0.0,
+}
 
 
 def run_classifier_eval(
@@ -117,14 +124,6 @@ def _eval_food101(classifier: Any, n_samples: int, output_dir: Path) -> dict[str
     }
 
 
-_EMPTY_TERRAIN_PAYLOAD: dict[str, Any] = {
-    "n_samples": 0,
-    "top1_accuracy": 0.0,
-    "top5_accuracy": 0.0,
-    "unknown_rate": 0.0,
-}
-
-
 def _eval_terrain(classifier: Any, terrain_dir: Path) -> dict[str, Any]:
     labels_csv = terrain_dir / "labels.csv"
     if not labels_csv.exists():
@@ -148,7 +147,7 @@ def _eval_terrain(classifier: Any, terrain_dir: Path) -> dict[str, Any]:
     top5_preds: list[list[str]] = []
     truths: list[str] = []
     for sample in samples:
-        if sample.label == "unknown":
+        if sample.label == UNKNOWN_LABEL:
             # Plat hors-distribution Food-101 : compte dans unknown_rate
             # mais n'est pas envoye au classifier.
             n_unknown += 1

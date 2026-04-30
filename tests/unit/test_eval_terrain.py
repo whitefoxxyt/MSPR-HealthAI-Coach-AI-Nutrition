@@ -143,6 +143,34 @@ def test_eval_terrain_unknown_label_only_contributes_to_unknown_rate(
     }
 
 
+def test_eval_terrain_skips_missing_image_files(tmp_path: Path) -> None:
+    images_dir = tmp_path / "images"
+    images_dir.mkdir()
+    _write_image(images_dir / "img_001.jpg")
+    # img_002.jpg est referencee dans le CSV mais absente du dossier images/
+    (tmp_path / "labels.csv").write_text(
+        "filename,label_food101\nimg_001.jpg,pizza\nimg_002.jpg,sushi\n",
+        encoding="utf-8",
+    )
+    classifier = _stub_classifier(
+        [
+            {"label": "pizza", "score": 0.9},
+            {"label": "lasagna", "score": 0.05},
+            {"label": "spaghetti_bolognese", "score": 0.02},
+            {"label": "ravioli", "score": 0.02},
+            {"label": "carbonara", "score": 0.01},
+        ]
+    )
+
+    payload = _eval_terrain(classifier, tmp_path)
+
+    # n_samples reflete le CSV (2), mais seul img_001 a ete classe.
+    assert payload["n_samples"] == 2
+    assert payload["top1_accuracy"] == 1.0
+    assert payload["top5_accuracy"] == 1.0
+    assert payload["unknown_rate"] == 0.0
+
+
 def test_eval_terrain_only_unknown_samples_yields_zero_accuracy(tmp_path: Path) -> None:
     images_dir = tmp_path / "images"
     images_dir.mkdir()

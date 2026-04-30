@@ -77,6 +77,34 @@ def test_render_metrics_md_includes_required_sections(tmp_path: Path) -> None:
     assert "docs/llm_latency.png" in content
 
 
+def test_render_metrics_md_hides_comparison_when_all_terrain_unknown(
+    tmp_path: Path,
+) -> None:
+    # n_samples > 0 mais unknown_rate == 1.0 -> truths vide cote runner,
+    # top1 == 0.0 ; afficher la comparaison serait trompeur.
+    payload = {
+        "classifier": {
+            "food101": {
+                "top1_accuracy": 0.71,
+                "top5_accuracy": 0.92,
+                "n_samples": 1000,
+            },
+            "terrain": {
+                "n_samples": 5,
+                "top1_accuracy": 0.0,
+                "top5_accuracy": 0.0,
+                "unknown_rate": 1.0,
+            },
+        }
+    }
+    out = tmp_path / "metrics.md"
+
+    render_metrics_md(payload, out)
+
+    content = out.read_text(encoding="utf-8")
+    assert "Comparaison Food-101 vs terrain" not in content
+
+
 def test_render_metrics_md_includes_terrain_unknown_rate(tmp_path: Path) -> None:
     payload = {
         "classifier": {
