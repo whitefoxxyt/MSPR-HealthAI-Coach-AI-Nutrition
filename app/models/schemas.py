@@ -15,7 +15,21 @@ class HealthGoal(str, Enum):
     sport_performance = "sport_performance"
 
 
+class Gender(str, Enum):
+    male = "male"
+    female = "female"
+
+
+class ActivityLevel(str, Enum):
+    sedentary = "sedentary"
+    light = "light"
+    moderate = "moderate"
+    active = "active"
+    very_active = "very_active"
+
+
 # MealAnalysis
+
 
 class MealAnalysisItem(BaseModel):
     id: int
@@ -42,7 +56,12 @@ class PaginatedAnalysesResponse(BaseModel):
                         "detected_foods": [
                             {"label": "pizza", "confidence": 0.85, "nutrition": {}}
                         ],
-                        "macros": {"calories": 1300, "protein_g": 30, "carbs_g": 160, "fat_g": 50},
+                        "macros": {
+                            "calories": 1300,
+                            "protein_g": 30,
+                            "carbs_g": 160,
+                            "fat_g": 50,
+                        },
                         "recommendations": ["Reduis la portion au prochain repas."],
                         "created_at": "2026-04-29T10:15:00",
                     }
@@ -57,6 +76,7 @@ class PaginatedAnalysesResponse(BaseModel):
 
 # NutritionGoal
 
+
 class NutritionGoalRequest(BaseModel):
     health_goal: HealthGoal | None = None
     calories_target: int | None = None
@@ -65,6 +85,12 @@ class NutritionGoalRequest(BaseModel):
     fat_g: Decimal | None = None
     allergies: list[str] = []
     diet_type: str | None = None
+    # Biometrie (V12) : entree pour le calcul du TDEE par nutrition_engine.
+    gender: Gender | None = None
+    age: int | None = None
+    weight_kg: Decimal | None = None
+    height_cm: Decimal | None = None
+    activity_level: ActivityLevel | None = None
 
 
 class NutritionGoalResponse(NutritionGoalRequest):
@@ -73,7 +99,25 @@ class NutritionGoalResponse(NutritionGoalRequest):
     model_config = {"from_attributes": True}
 
 
+# GET /me/macros : cible journaliere derivee du profil + objectif sante (slice 2 PRD #45).
+
+
+class MacroTargetsView(BaseModel):
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+
+
+class MeMacrosResponse(BaseModel):
+    profile_completion_required: bool
+    missing_fields: list[str] = []
+    tdee: float | None = None
+    macros: MacroTargetsView | None = None
+
+
 # Plans repas fallback (issue NUT-8). Cf. POST /api/v1/generate-meal-plan.
+
 
 class MealMacros(BaseModel):
     calories: int
@@ -197,3 +241,18 @@ class RecommendationContext(BaseModel):
     user_id: int
     imbalance: Imbalance
     health_goal: HealthGoal
+
+
+# Tailles de portion PNNS (issue NUT-49). Cf. app/data/portion_sizes.py.
+
+
+class ServingSizeLabel(str, Enum):
+    small = "small"
+    medium = "medium"
+    large = "large"
+
+
+class ServingSize(BaseModel):
+    label: ServingSizeLabel
+    grams: int = Field(gt=0)
+    description: str | None = None

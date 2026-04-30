@@ -63,3 +63,9 @@ class NutritionGoal(Base):
     allergies = Column(ARRAY(String))
     diet_type = Column(String(50))
     health_goal = Column(String(30))
+    # Biometrie (V12) pour le calcul TDEE via Mifflin-St Jeor.
+    gender = Column(String(10))
+    age = Column(Integer)
+    weight_kg = Column(Numeric(5, 2))
+    height_cm = Column(Numeric(5, 2))
+    activity_level = Column(String(20))
