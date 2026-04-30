@@ -17,7 +17,7 @@ from testcontainers.postgres import PostgresContainer
 
 MIGRATIONS_DIR = Path(os.environ.get("MIGRATIONS_DIR", "/migrations"))
 MIGRATION_PATTERN = re.compile(r"^V(\d+)__.*\.sql$")
-MAX_MIGRATION_VERSION = 10  # AC issue 26 : V1 a V10
+MAX_MIGRATION_VERSION = 12  # V11 (slice 1, PRD #45) + V12 (slice 2, biometrie)
 
 TEST_AUTH_SECRET = "test-secret-not-for-prod-do-not-use"
 TEST_OLLAMA_HOST = "http://ollama-test:11434"

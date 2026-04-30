@@ -1,5 +1,15 @@
 from pydantic_settings import BaseSettings
 
+# Reperes ANSES (rapport "Actualisation des reperes du PNNS", 2016 ;
+# avis 2017-SA-0142 sur les recommandations alimentaires).
+# Utilises par nutrition_engine et imbalance_detector pour calculer les
+# desequilibres macro a partir d'une cible personnalisee (TDEE) plutot que
+# de seuils en pourcentage figes.
+RNP_PROTEIN_G_PER_KG = 0.83  # apport recommande, en g/kg de poids corporel/j
+RNP_FIBER_G_PER_DAY = 30  # cible journaliere fibres alimentaires, en g/j
+RNP_AGS_PERCENT_OF_AET_MAX = 0.12  # plafond acides gras satures, en % AET
+RNP_TOTAL_SUGARS_G_MAX = 100  # plafond sucres totaux, en g/j
+
 
 class Settings(BaseSettings):
     db_host: str = "mspr-healthai-db"

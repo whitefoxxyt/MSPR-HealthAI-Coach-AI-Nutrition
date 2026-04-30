@@ -4,7 +4,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.limiter import limiter
-from app.routers import health, meal_analysis, meal_plan, nutrition_goals
+from app.routers import health, me, meal_analysis, meal_plan, nutrition_goals
 
 API_DESCRIPTION = """
 Micro-service d'analyse nutritionnelle et de generation de plans repas par IA, partie de la plateforme MSPR HealthAI Coach.
@@ -59,3 +59,4 @@ app.include_router(health.router)
 app.include_router(meal_analysis.router, prefix="/api/v1")
 app.include_router(meal_plan.router, prefix="/api/v1")
 app.include_router(nutrition_goals.router, prefix="/api/v1")
+app.include_router(me.router, prefix="/api/v1")
