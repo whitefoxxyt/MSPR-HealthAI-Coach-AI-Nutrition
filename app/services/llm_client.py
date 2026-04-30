@@ -61,8 +61,6 @@ _RECO_DEFAULT_FALLBACK = (
     "Conseil indisponible pour le moment. Maintiens une alimentation equilibree."
 )
 
-_RECO_EMPTY_OK = ""
-
 
 # Helpers : canonicalisation et hash
 
@@ -139,7 +137,7 @@ async def generate_recommendation(
     hash de top_label + health_goal + imbalances triees).
     """
     if not ctx_list:
-        return _RECO_EMPTY_OK
+        return ""
 
     sorted_tags = sorted(ctx_list, key=_tag_sort_key)
     prompt = _build_recommendation_prompt(sorted_tags, health_goal)

@@ -515,6 +515,6 @@ async def test_generate_plan_semaphore_limits_concurrent_ollama_calls(
     assert max_observed <= 2  # bornage du semaphore
 
 
-# Tests generate_recommendation : voir tests/unit/test_llm_recommendation_v2.py
+# Tests generate_recommendation : voir tests/unit/test_llm_recommendation.py
 # (signature refactoree par l'issue #51 : list[ImbalanceTag] au lieu de
 # RecommendationContext, 1 seul appel Ollama au lieu de N).

@@ -13,6 +13,7 @@ from app.services.nutrition_engine import (
     MealType,
     build_user_profile,
     compute_meal_targets,
+    meal_quota,
 )
 
 # Detection des desequilibres macros par rapport a une cible repas issue de
@@ -88,7 +89,7 @@ def detect(
         # (cf. nutrition_lookup et meal_analyses.macros stockes en JSONB).
         actual_fibers = meal_macros.get("fiber_g")
     if actual_fibers is not None:
-        fibers_target = config.RNP_FIBER_G_PER_DAY * _meal_quota(meal_type)
+        fibers_target = config.RNP_FIBER_G_PER_DAY * meal_quota(meal_type)
         fibers_tag = _floor_only(
             Nutrient.fibers_g, float(actual_fibers), fibers_target, "g"
         )
@@ -157,19 +158,6 @@ def _format_value(value: float, unit: str) -> str:
     if unit == "kcal":
         return f"{value:.0f}"
     return f"{value:.1f}"
-
-
-def _meal_quota(meal_type: MealType | None) -> float:
-    # Replique la logique nutrition_engine pour la cible fibres : pas exposee
-    # par compute_meal_targets (qui ne renvoie que les macros energetiques).
-    if meal_type is None:
-        return 0.25
-    return {
-        MealType.breakfast: 0.25,
-        MealType.lunch: 0.35,
-        MealType.dinner: 0.30,
-        MealType.snack: 0.10,
-    }[meal_type]
 
 
 def _ceiling_only(
