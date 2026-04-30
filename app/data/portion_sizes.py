@@ -179,5 +179,7 @@ _FOOD101_TO_PNNS_CATEGORY: dict[str, str] = {
 def get_serving_sizes(food_label: str) -> list[ServingSize]:
     category = _FOOD101_TO_PNNS_CATEGORY.get(food_label)
     if category is None:
-        return [ServingSize(label=ServingSizeLabel.medium, grams=100)]
-    return _PNNS_SERVING_SIZES[category]
+        return [
+            ServingSize(label=ServingSizeLabel.medium, grams=100, description="100 g")
+        ]
+    return list(_PNNS_SERVING_SIZES[category])
