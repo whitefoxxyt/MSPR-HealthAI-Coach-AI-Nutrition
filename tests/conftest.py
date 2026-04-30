@@ -23,7 +23,7 @@ TEST_AUTH_SECRET = "test-secret-not-for-prod-do-not-use"
 TEST_OLLAMA_HOST = "http://ollama-test:11434"
 
 # Tables truncatees avant chaque test (isolation function-scope).
-# nutrition_entries vient de l'ETL, le reste est cree par V8/V9.
+# nutrition_entries vient de l'ETL, le reste est cree en V8 puis enrichi V9/V10/V11.
 _TRUNCATE_TABLES = [
     "meal_analyses",
     "meal_plans",
@@ -45,7 +45,7 @@ def _ordered_migrations() -> list[Path]:
 
 @pytest.fixture(scope="session")
 def pg_container() -> Generator[PostgresContainer, None, None]:
-    """Spawn un PostgreSQL 17 ephemere et joue les migrations V1 a V9."""
+    """Spawn un PostgreSQL 17 ephemere et joue les migrations jusqu'a MAX_MIGRATION_VERSION."""
     container = PostgresContainer("postgres:17-alpine", driver="psycopg2")
     container.start()
     try:
