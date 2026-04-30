@@ -60,14 +60,23 @@ def _render_classifier_section(data: dict[str, Any]) -> list[str]:
 
     terrain = data.get("terrain")
     if terrain:
-        out.append("### Terrain (50 photos manuelles)")
+        out.append("### Terrain (photos telephone, eval HITL)")
         out.append("")
         out.append(f"- N samples : {terrain.get('n_samples', 0)}")
         out.append(f"- Top-1 accuracy : {terrain.get('top1_accuracy', 0.0):.4f}")
         out.append(f"- Top-5 accuracy : {terrain.get('top5_accuracy', 0.0):.4f}")
+        out.append(
+            f"- Unknown_rate (plats hors-distribution Food-101) : "
+            f"{terrain.get('unknown_rate', 0.0):.4f}"
+        )
         out.append("")
 
-    if food101 and terrain:
+    if (
+        food101
+        and terrain
+        and terrain.get("n_samples", 0) > 0
+        and terrain.get("unknown_rate", 0.0) < 1.0
+    ):
         out.append("### Comparaison Food-101 vs terrain")
         out.append("")
         delta_top1 = food101.get("top1_accuracy", 0.0) - terrain.get(
