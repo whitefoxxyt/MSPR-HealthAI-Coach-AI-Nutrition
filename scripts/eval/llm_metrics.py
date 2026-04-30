@@ -2,84 +2,28 @@ from __future__ import annotations
 
 import csv
 import math
-import re
-import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.models.schemas import FallbackMealPlan
+from app.services.constraint_validator import (
+    ConstraintSpec,
+    ViolationType,
+    validate as validate_constraints,
+)
 
-# Heuristique simple pour le respect du regime alimentaire (vegan, vegetarien,
-# sans_gluten). Liste non exhaustive : c'est une eval, pas un nutritionniste.
-_DIET_BANNED: dict[str, frozenset[str]] = {
-    "vegan": frozenset(
-        {
-            "viande",
-            "boeuf",
-            "poulet",
-            "porc",
-            "agneau",
-            "veau",
-            "dinde",
-            "canard",
-            "jambon",
-            "lardon",
-            "saucisse",
-            "bacon",
-            "poisson",
-            "saumon",
-            "thon",
-            "crevette",
-            "crevettes",
-            "fruit de mer",
-            "fruits de mer",
-            "lait",
-            "laitiere",
-            "fromage",
-            "yaourt",
-            "beurre",
-            "creme",
-            "miel",
-            "oeuf",
-        }
-    ),
-    "vegetarien": frozenset(
-        {
-            "viande",
-            "boeuf",
-            "poulet",
-            "porc",
-            "agneau",
-            "veau",
-            "dinde",
-            "canard",
-            "jambon",
-            "lardon",
-            "saucisse",
-            "bacon",
-            "poisson",
-            "saumon",
-            "thon",
-            "crevette",
-            "crevettes",
-            "fruit de mer",
-            "fruits de mer",
-        }
-    ),
-    "sans_gluten": frozenset(
-        {
-            "ble",
-            "farine de ble",
-            "pain",
-            "pates",
-            "couscous",
-            "boulgour",
-            "seigle",
-            "orge",
-            "avoine",
-        }
-    ),
-}
+__all__ = [
+    "ConstraintCheck",
+    "ConstraintSpec",
+    "GenerationOutcome",
+    "HitlSummary",
+    "check_plan_constraints",
+    "constraint_satisfaction_rate",
+    "fallback_rate",
+    "json_validity_rate",
+    "latency_percentiles",
+    "load_hitl_ratings",
+]
 
 
 @dataclass(frozen=True)
@@ -141,62 +85,20 @@ def constraint_satisfaction_rate(checks: list[ConstraintCheck]) -> float:
     return sum(1 for c in checks if c.all_satisfied()) / len(checks)
 
 
-@dataclass(frozen=True)
-class ConstraintSpec:
-    """Contraintes a verifier sur un plan : allergies + budget + regime."""
-
-    allergies: list[str] = field(default_factory=list)
-    max_daily_budget_eur: float | None = None
-    diet_type: str | None = None
-
-
-def _normalize(text_value: str) -> str:
-    decomposed = unicodedata.normalize("NFD", text_value)
-    stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
-    return stripped.casefold()
-
-
-def _ingredient_contains_term(ingredient: str, term: str) -> bool:
-    """Match a frontiere de mot, comme llm_client._enforce_allergy_absence."""
-    pattern = re.compile(rf"\b{re.escape(_normalize(term))}\b")
-    return bool(pattern.search(_normalize(ingredient)))
-
-
-def _plan_violates_terms(plan: FallbackMealPlan, terms: frozenset[str] | list[str]) -> bool:
-    """True des qu'un ingredient du plan matche un des termes (frontiere de mot)."""
-    return any(
-        _ingredient_contains_term(ing, term)
-        for day in plan.days
-        for meal in day.meals
-        for ing in meal.ingredients
-        for term in terms
-    )
-
-
 def check_plan_constraints(
     plan: FallbackMealPlan,
     spec: ConstraintSpec,
 ) -> ConstraintCheck:
-    """Verifie qu'un plan respecte allergies + budget + regime."""
-    allergies_absent = not (
-        spec.allergies and _plan_violates_terms(plan, spec.allergies)
-    )
+    """Verifie qu'un plan respecte allergies + budget + regime.
 
-    budget_respected = True
-    if spec.max_daily_budget_eur is not None:
-        for day in plan.days:
-            day_cost = sum(meal.est_budget_eur for meal in day.meals)
-            if day_cost > spec.max_daily_budget_eur:
-                budget_respected = False
-                break
-
-    banned = _DIET_BANNED.get(spec.diet_type or "", frozenset())
-    diet_respected = not (banned and _plan_violates_terms(plan, banned))
-
+    Adaptateur autour de constraint_validator.validate : agrege les violations
+    granulaires en trois drapeaux booleens pour l'eval.
+    """
+    types = {v.type for v in validate_constraints(plan, spec)}
     return ConstraintCheck(
-        allergies_absent=allergies_absent,
-        budget_respected=budget_respected,
-        diet_respected=diet_respected,
+        allergies_absent=ViolationType.allergy not in types,
+        budget_respected=ViolationType.budget not in types,
+        diet_respected=ViolationType.diet not in types,
     )
 
 

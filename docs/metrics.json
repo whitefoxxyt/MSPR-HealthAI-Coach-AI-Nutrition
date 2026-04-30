@@ -1,5 +1,953 @@
 {
   "_note": "Placeholder. Genere par scripts/eval_metrics.py classifier / llm.",
-  "classifier": {},
-  "llm": {}
+  "classifier": {
+    "food101": {
+      "confusion_matrix": [
+        [
+          27,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          29,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          29,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          26,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          29,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          23,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          29,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          28,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          23,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          28,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          1,
+          0,
+          21,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          21,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          24,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          22,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          24,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          24,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          22,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          19,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          19,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          21
+        ]
+      ],
+      "confusion_matrix_labels": [
+        "grilled_salmon",
+        "pulled_pork_sandwich",
+        "cannoli",
+        "gyoza",
+        "deviled_eggs",
+        "foie_gras",
+        "edamame",
+        "spaghetti_carbonara",
+        "gnocchi",
+        "spaghetti_bolognese",
+        "chicken_curry",
+        "omelette",
+        "poutine",
+        "baby_back_ribs",
+        "tacos",
+        "paella",
+        "bibimbap",
+        "ravioli",
+        "nachos",
+        "cup_cakes"
+      ],
+      "confusion_matrix_png": "docs/confusion_matrix_food101.png",
+      "n_samples": 1000,
+      "per_class": {
+        "apple_pie": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "baby_back_ribs": {
+          "f1": 0.9166666666666666,
+          "precision": 1.0,
+          "recall": 0.8461538461538461,
+          "support": 26
+        },
+        "baklava": {
+          "f1": 0.8571428571428571,
+          "precision": 0.8823529411764706,
+          "recall": 0.8333333333333334,
+          "support": 18
+        },
+        "beignets": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "bibimbap": {
+          "f1": 0.9361702127659575,
+          "precision": 1.0,
+          "recall": 0.88,
+          "support": 25
+        },
+        "bread_pudding": {
+          "f1": 0.8333333333333334,
+          "precision": 0.9375,
+          "recall": 0.75,
+          "support": 20
+        },
+        "breakfast_burrito": {
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 13
+        },
+        "bruschetta": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "cannoli": {
+          "f1": 0.9666666666666666,
+          "precision": 1.0,
+          "recall": 0.9354838709677419,
+          "support": 31
+        },
+        "caprese_salad": {
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 15
+        },
+        "ceviche": {
+          "f1": 0.85,
+          "precision": 0.9444444444444444,
+          "recall": 0.7727272727272727,
+          "support": 22
+        },
+        "cheese_plate": {
+          "f1": 0.9545454545454546,
+          "precision": 0.9545454545454546,
+          "recall": 0.9545454545454546,
+          "support": 22
+        },
+        "cheesecake": {
+          "f1": 0.8421052631578948,
+          "precision": 0.8888888888888888,
+          "recall": 0.8,
+          "support": 10
+        },
+        "chicken_curry": {
+          "f1": 0.84,
+          "precision": 0.9545454545454546,
+          "recall": 0.75,
+          "support": 28
+        },
+        "chicken_wings": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "chocolate_cake": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "chocolate_mousse": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "churros": {
+          "f1": 0.9375,
+          "precision": 0.9375,
+          "recall": 0.9375,
+          "support": 16
+        },
+        "crab_cakes": {
+          "f1": 0.75,
+          "precision": 0.75,
+          "recall": 0.75,
+          "support": 8
+        },
+        "croque_madame": {
+          "f1": 0.9696969696969697,
+          "precision": 1.0,
+          "recall": 0.9411764705882353,
+          "support": 17
+        },
+        "cup_cakes": {
+          "f1": 0.9333333333333332,
+          "precision": 0.9545454545454546,
+          "recall": 0.9130434782608695,
+          "support": 23
+        },
+        "deviled_eggs": {
+          "f1": 0.983050847457627,
+          "precision": 1.0,
+          "recall": 0.9666666666666667,
+          "support": 30
+        },
+        "donuts": {
+          "f1": 0.9444444444444444,
+          "precision": 1.0,
+          "recall": 0.8947368421052632,
+          "support": 19
+        },
+        "edamame": {
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 29
+        },
+        "eggs_benedict": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "falafel": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "filet_mignon": {
+          "f1": 0.6896551724137931,
+          "precision": 1.0,
+          "recall": 0.5263157894736842,
+          "support": 19
+        },
+        "fish_and_chips": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "foie_gras": {
+          "f1": 0.8679245283018869,
+          "precision": 1.0,
+          "recall": 0.7666666666666667,
+          "support": 30
+        },
+        "french_onion_soup": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "french_toast": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "fried_calamari": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "fried_rice": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "frozen_yogurt": {
+          "f1": 0.8571428571428572,
+          "precision": 0.9375,
+          "recall": 0.7894736842105263,
+          "support": 19
+        },
+        "garlic_bread": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "gnocchi": {
+          "f1": 0.8214285714285714,
+          "precision": 0.8214285714285714,
+          "recall": 0.8214285714285714,
+          "support": 28
+        },
+        "greek_salad": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "grilled_cheese_sandwich": {
+          "f1": 0.972972972972973,
+          "precision": 0.9473684210526315,
+          "recall": 1.0,
+          "support": 18
+        },
+        "grilled_salmon": {
+          "f1": 0.9152542372881356,
+          "precision": 1.0,
+          "recall": 0.84375,
+          "support": 32
+        },
+        "guacamole": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "gyoza": {
+          "f1": 0.9285714285714286,
+          "precision": 1.0,
+          "recall": 0.8666666666666667,
+          "support": 30
+        },
+        "hamburger": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "hot_and_sour_soup": {
+          "f1": 0.9777777777777777,
+          "precision": 0.9565217391304348,
+          "recall": 1.0,
+          "support": 22
+        },
+        "ice_cream": {
+          "f1": 0.8333333333333334,
+          "precision": 0.8333333333333334,
+          "recall": 0.8333333333333334,
+          "support": 18
+        },
+        "lasagna": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "lobster_roll_sandwich": {
+          "f1": 0.9333333333333332,
+          "precision": 0.9130434782608695,
+          "recall": 0.9545454545454546,
+          "support": 22
+        },
+        "macaroni_and_cheese": {
+          "f1": 0.9268292682926829,
+          "precision": 0.95,
+          "recall": 0.9047619047619048,
+          "support": 21
+        },
+        "macarons": {
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 17
+        },
+        "nachos": {
+          "f1": 0.8837209302325583,
+          "precision": 0.95,
+          "recall": 0.8260869565217391,
+          "support": 23
+        },
+        "omelette": {
+          "f1": 0.8571428571428572,
+          "precision": 0.9545454545454546,
+          "recall": 0.7777777777777778,
+          "support": 27
+        },
+        "pad_thai": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "paella": {
+          "f1": 0.9230769230769231,
+          "precision": 0.9230769230769231,
+          "recall": 0.9230769230769231,
+          "support": 26
+        },
+        "panna_cotta": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "peking_duck": {
+          "f1": 0.9090909090909091,
+          "precision": 0.8823529411764706,
+          "recall": 0.9375,
+          "support": 16
+        },
+        "pho": {
+          "f1": 0.962962962962963,
+          "precision": 1.0,
+          "recall": 0.9285714285714286,
+          "support": 14
+        },
+        "pizza": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "pork_chop": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "poutine": {
+          "f1": 0.9600000000000001,
+          "precision": 1.0,
+          "recall": 0.9230769230769231,
+          "support": 26
+        },
+        "pulled_pork_sandwich": {
+          "f1": 0.9206349206349206,
+          "precision": 0.9354838709677419,
+          "recall": 0.90625,
+          "support": 32
+        },
+        "ramen": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "ravioli": {
+          "f1": 0.7916666666666666,
+          "precision": 0.7916666666666666,
+          "recall": 0.7916666666666666,
+          "support": 24
+        },
+        "red_velvet_cake": {
+          "f1": 0.9743589743589743,
+          "precision": 1.0,
+          "recall": 0.95,
+          "support": 20
+        },
+        "risotto": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "samosa": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "sashimi": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "scallops": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "seaweed_salad": {
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 17
+        },
+        "shrimp_and_grits": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "spaghetti_bolognese": {
+          "f1": 1.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 28
+        },
+        "spaghetti_carbonara": {
+          "f1": 0.9655172413793104,
+          "precision": 0.9655172413793104,
+          "recall": 0.9655172413793104,
+          "support": 29
+        },
+        "steak": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "strawberry_shortcake": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        },
+        "sushi": {
+          "f1": 0.9302325581395349,
+          "precision": 0.9523809523809523,
+          "recall": 0.9090909090909091,
+          "support": 22
+        },
+        "tacos": {
+          "f1": 0.9600000000000001,
+          "precision": 1.0,
+          "recall": 0.9230769230769231,
+          "support": 26
+        },
+        "takoyaki": {
+          "f1": 0.9545454545454546,
+          "precision": 0.9545454545454546,
+          "recall": 0.9545454545454546,
+          "support": 22
+        },
+        "tuna_tartare": {
+          "f1": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "support": 0
+        }
+      },
+      "top1_accuracy": 0.888,
+      "top5_accuracy": 0.972
+    }
+  },
+  "generated_at": 1777534688,
+  "llm": {
+    "constraint_n_plans": 10,
+    "constraint_satisfaction_rate": 0.0,
+    "fallback_rate": 0.0,
+    "hitl": {
+      "mean_coherence": 0.0,
+      "mean_nutrition": 0.0,
+      "mean_originalite": 0.0,
+      "n_ratings": 0
+    },
+    "json_validity_rate": 1.0,
+    "latency": {
+      "max_ms": 97856.14665799994,
+      "p50_ms": 83654.46811300013,
+      "p95_ms": 95209.65956199996
+    },
+    "latency_distribution_png": "docs/llm_latency_distribution.png",
+    "n_generations": 30
+  }
 }

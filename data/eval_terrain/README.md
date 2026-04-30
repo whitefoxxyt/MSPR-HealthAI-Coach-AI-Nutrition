@@ -2,33 +2,39 @@
 
 ## Objectif
 
-50 photos prises au telephone (repas reels, restaurants, plats maison)
+50 a 100 photos prises au telephone (repas reels, restaurants, plats maison)
 avec annotation manuelle, pour mesurer l'ecart entre l'accuracy academique
 (Food-101 test split) et la realite des photos utilisateur.
 
-Cible : 50 photos couvrant un mix de classes Food-101.
+Cible : 50 a 100 photos couvrant un mix de classes Food-101 + quelques plats
+hors-distribution (label `unknown`) pour mesurer le taux de plats absents
+de Food-101.
 
 ## Format
 
-- Photos : `.jpg` ou `.png` dans ce dossier (`data/eval_terrain/`)
-- Annotations : `labels.csv` au format
+- Photos : `.jpg` ou `.png` dans `data/eval_terrain/images/`
+- Annotations : `data/eval_terrain/labels.csv` au format
   ```
-  filename,label
+  filename,label_food101
   IMG_001.jpg,pizza
   IMG_002.jpg,sushi
+  IMG_003.jpg,unknown
   ```
-- `label` doit etre une classe Food-101 (snake_case, ex: `grilled_salmon`,
-  `caesar_salad`). Liste complete : voir `nateraw/food` sur HuggingFace.
-- Si la photo represente un plat hors des 101 classes, l'omettre :
-  l'eval ne couvre que la distribution Food-101.
+- `label_food101` doit etre une classe Food-101 (snake_case, ex:
+  `grilled_salmon`, `caesar_salad`). Liste complete : voir `nateraw/food`
+  sur HuggingFace.
+- Si la photo represente un plat hors des 101 classes, utiliser le label
+  special `unknown` : il sera comptabilise dans `unknown_rate` mais exclu
+  des metriques top-1 / top-5.
 
 ## Workflow
 
-1. Prendre 50 photos varie : eclairage, angle, plats composites,
-   restaurants, cantine, maison.
+1. Prendre 50 a 100 photos variees : eclairage, angle, plats composites,
+   restaurants, cantine, maison, plats hors Food-101.
 2. Renommer en `IMG_NNN.jpg` (3 chiffres) pour rester ordonne.
-3. Editer `labels.csv` en ajoutant une ligne par photo.
-4. Lancer `python scripts/eval_metrics.py classifier --terrain-dir data/eval_terrain/`.
+3. Deposer les photos dans `data/eval_terrain/images/`.
+4. Editer `labels.csv` en ajoutant une ligne par photo.
+5. Lancer `python scripts/eval_metrics.py classifier --terrain-dir data/eval_terrain/`.
 
 ## Reproductibilite
 
