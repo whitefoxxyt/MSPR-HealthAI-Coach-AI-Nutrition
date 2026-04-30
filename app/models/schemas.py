@@ -15,6 +15,19 @@ class HealthGoal(str, Enum):
     sport_performance = "sport_performance"
 
 
+class Gender(str, Enum):
+    male = "male"
+    female = "female"
+
+
+class ActivityLevel(str, Enum):
+    sedentary = "sedentary"
+    light = "light"
+    moderate = "moderate"
+    active = "active"
+    very_active = "very_active"
+
+
 # MealAnalysis
 
 
@@ -72,12 +85,35 @@ class NutritionGoalRequest(BaseModel):
     fat_g: Decimal | None = None
     allergies: list[str] = []
     diet_type: str | None = None
+    # Biometrie (V12) : entree pour le calcul du TDEE par nutrition_engine.
+    gender: Gender | None = None
+    age: int | None = None
+    weight_kg: Decimal | None = None
+    height_cm: Decimal | None = None
+    activity_level: ActivityLevel | None = None
 
 
 class NutritionGoalResponse(NutritionGoalRequest):
     user_id: int
 
     model_config = {"from_attributes": True}
+
+
+# GET /me/macros : cible journaliere derivee du profil + objectif sante (slice 2 PRD #45).
+
+
+class MacroTargetsView(BaseModel):
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+
+
+class MeMacrosResponse(BaseModel):
+    profile_completion_required: bool
+    missing_fields: list[str] = []
+    tdee: float | None = None
+    macros: MacroTargetsView | None = None
 
 
 # Plans repas fallback (issue NUT-8). Cf. POST /api/v1/generate-meal-plan.
