@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 
 from app.data.portion_sizes import (
@@ -66,9 +69,6 @@ def test_mapping_only_uses_declared_pnns_categories() -> None:
 # `python -c "import json,hashlib; from app.data.portion_sizes import \
 # _FOOD101_TO_PNNS_CATEGORY as m; print(hashlib.sha256(json.dumps(m, \
 # sort_keys=True, ensure_ascii=False).encode()).hexdigest())"`
-import hashlib
-import json
-
 EXPECTED_MAPPING_SHA256 = (
     "142fdf245825f0a7432adc17f9c8ada39db328d758fbfbbb1b0988c38341c806"
 )
