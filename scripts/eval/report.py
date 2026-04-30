@@ -106,37 +106,143 @@ def _render_llm_section(data: dict[str, Any]) -> list[str]:
         return []
     out: list[str] = ["## LLM (Ollama gemma3:4b)", ""]
 
-    out.append(
-        f"- Taux de validite JSON (1er essai) : {data.get('json_validity_rate', 0.0):.4f}"
-    )
-    out.append(f"- Taux d'invocation Fallback : {data.get('fallback_rate', 0.0):.4f}")
-    latency = data.get("latency") or {}
-    out.append(
-        f"- Latence : p50 {latency.get('p50_ms', 0.0):.0f} ms, "
-        f"p95 {latency.get('p95_ms', 0.0):.0f} ms, "
-        f"max {latency.get('max_ms', 0.0):.0f} ms"
-    )
-    out.append(
+    naive = data.get("naive") or {}
+    pipeline = data.get("pipeline") or {}
+
+    # Retro-compatibilite : si la cle "naive" n'existe pas, on suppose le format
+    # pre-slice 7 (champs a plat directement sous "llm").
+    if not naive and not pipeline:
+        naive = data
+
+    if naive:
+        out.extend(_render_naive_block(naive))
+    if pipeline:
+        out.extend(_render_pipeline_block(pipeline))
+    if naive and pipeline:
+        out.extend(_render_naive_vs_pipeline_comparison(naive, pipeline))
+
+    return out
+
+
+def _render_naive_block(naive: dict[str, Any]) -> list[str]:
+    out: list[str] = [
+        "### Niveau naive (LLM nu, sans DeCRIM-light)",
+        "",
+        f"- Taux de validite JSON (1er essai) : "
+        f"{naive.get('json_validity_rate', 0.0):.4f}",
+        f"- Taux d'invocation Fallback : {naive.get('fallback_rate', 0.0):.4f}",
+        f"- Latence : p50 {naive.get('latency_p50_ms', 0.0):.0f} ms, "
+        f"p95 {naive.get('latency_p95_ms', 0.0):.0f} ms, "
+        f"max {naive.get('latency_max_ms', 0.0):.0f} ms",
         f"- Respect simultanee allergies + budget + regime : "
-        f"{data.get('constraint_satisfaction_rate', 0.0):.4f}"
-    )
+        f"{naive.get('constraint_satisfaction', 0.0):.4f}",
+    ]
+    by_c = naive.get("by_constraint") or {}
+    if by_c:
+        out.append(_format_by_constraint_line(by_c))
     out.append("")
 
-    hitl = data.get("hitl") or {}
-    if hitl:
-        out.append("### Evaluation qualitative humaine (HITL, 1-5)")
-        out.append("")
-        out.append(f"- N ratings : {hitl.get('n_ratings', 0)}")
-        out.append(f"- Pertinence nutrition : {hitl.get('mean_nutrition', 0.0):.2f}")
-        out.append(f"- Originalite : {hitl.get('mean_originalite', 0.0):.2f}")
-        out.append(f"- Coherence : {hitl.get('mean_coherence', 0.0):.2f}")
-        out.append("")
+    out.extend(_render_hitl_block(naive.get("hitl") or {}))
 
-    latency_png = data.get("latency_distribution_png")
+    latency_png = naive.get("latency_distribution_png")
     if latency_png:
         out.append(f"![Distribution latence LLM]({latency_png})")
         out.append("")
+    return out
 
+
+def _render_hitl_block(hitl: dict[str, Any]) -> list[str]:
+    if not hitl:
+        return []
+    return [
+        "#### Evaluation qualitative humaine (HITL, 1-5)",
+        "",
+        f"- N ratings : {hitl.get('n_ratings', 0)}",
+        f"- Pertinence nutrition : {hitl.get('mean_nutrition', 0.0):.2f}",
+        f"- Originalite : {hitl.get('mean_originalite', 0.0):.2f}",
+        f"- Coherence : {hitl.get('mean_coherence', 0.0):.2f}",
+        "",
+    ]
+
+
+def _render_pipeline_block(pipeline: dict[str, Any]) -> list[str]:
+    out: list[str] = [
+        "### Niveau pipeline (DeCRIM-light + cache bypass)",
+        "",
+        f"- N generations : {pipeline.get('n_generations', 0)}",
+        f"- compliance_status full : "
+        f"{pipeline.get('constraint_satisfaction', 0.0):.4f}",
+        f"- compliance_status partial_budget : "
+        f"{pipeline.get('partial_compliance', 0.0):.4f}",
+        f"- compliance_status static_fallback : "
+        f"{pipeline.get('static_fallback', 0.0):.4f}",
+        f"- abandoned_503 (contraintes infaisables) : "
+        f"{pipeline.get('abandoned_503', 0.0):.4f}",
+    ]
+    by_c = pipeline.get("by_constraint") or {}
+    if by_c:
+        out.append(_format_by_constraint_line(by_c))
+    out.append(
+        f"- Latence : p50 {pipeline.get('latency_p50_ms', 0.0):.0f} ms, "
+        f"p95 {pipeline.get('latency_p95_ms', 0.0):.0f} ms"
+    )
+    rcd = pipeline.get("retry_count_distribution") or {}
+    if rcd:
+        buckets = ", ".join(f"{k} retry: {v}" for k, v in sorted(rcd.items()))
+        out.append(f"- Distribution retries : {buckets}")
+    out.append("")
+    return out
+
+
+def _format_by_constraint_line(by_c: dict[str, Any]) -> str:
+    return (
+        f"- Par contrainte : allergies {by_c.get('allergies', 0.0):.4f}, "
+        f"budget {by_c.get('budget', 0.0):.4f}, "
+        f"regime {by_c.get('diet', 0.0):.4f}"
+    )
+
+
+def _render_naive_vs_pipeline_comparison(
+    naive: dict[str, Any], pipeline: dict[str, Any]
+) -> list[str]:
+    """Section comparative explicite entre naive et pipeline (slice 7).
+
+    Quantifie l'apport du retry DeCRIM-light : delta de constraint_satisfaction,
+    repartition des relachements, surcout en latence.
+    """
+    out = ["### Comparaison naive vs pipeline", ""]
+
+    delta_full = pipeline.get("constraint_satisfaction", 0.0) - naive.get(
+        "constraint_satisfaction", 0.0
+    )
+    out.append(
+        f"- Gain compliance_status full vs naive : {delta_full:+.4f}. "
+        "Un gain positif quantifie l'apport du retry cible (allergie/regime "
+        "partiels, budget complet) et du fallback hierarchique."
+    )
+
+    naive_by = naive.get("by_constraint") or {}
+    pipe_by = pipeline.get("by_constraint") or {}
+    if naive_by and pipe_by:
+        for key in ("allergies", "budget", "diet"):
+            out.append(
+                f"- Delta {key} : "
+                f"naive {naive_by.get(key, 0.0):.4f} -> "
+                f"pipeline {pipe_by.get(key, 0.0):.4f} "
+                f"({pipe_by.get(key, 0.0) - naive_by.get(key, 0.0):+.4f})"
+            )
+
+    naive_p95 = naive.get("latency_p95_ms", 0.0)
+    pipe_p95 = pipeline.get("latency_p95_ms", 0.0)
+    if naive_p95 and pipe_p95:
+        ratio = pipe_p95 / naive_p95 if naive_p95 else 0.0
+        out.append(
+            f"- Surcout latence p95 : naive {naive_p95:.0f} ms -> "
+            f"pipeline {pipe_p95:.0f} ms (ratio x{ratio:.2f}). "
+            "Le pipeline paie le prix des retries internes pour reduire les "
+            "violations critiques (allergies/regime)."
+        )
+    out.append("")
     return out
 
 
