@@ -4,9 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
-import re
 import time
-import unicodedata
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -22,6 +20,11 @@ from app.models.schemas import (
     Imbalance,
     PlanInputs,
     RecommendationContext,
+)
+from app.services.constraint_validator import (
+    ConstraintSpec,
+    ViolationType,
+    validate as validate_constraints,
 )
 
 T = TypeVar("T")
@@ -81,7 +84,9 @@ def _sort_keys(obj: Any) -> Any:
 def compute_inputs_hash(inputs: PlanInputs) -> str:
     """SHA256 hex du JSON canonicalise."""
     canonical = canonicalize_inputs(inputs)
-    serialized = json.dumps(canonical, separators=(",", ":"), ensure_ascii=False, sort_keys=True)
+    serialized = json.dumps(
+        canonical, separators=(",", ":"), ensure_ascii=False, sort_keys=True
+    )
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
@@ -223,39 +228,12 @@ def _validate_plan(raw_response: str, inputs: PlanInputs) -> FallbackMealPlan:
     if isinstance(parsed, dict):
         parsed.setdefault("fallback", False)
     plan = FallbackMealPlan.model_validate(parsed)
-    _enforce_allergy_absence(plan, inputs.allergies)
+    if inputs.allergies:
+        spec = ConstraintSpec(allergies=inputs.allergies)
+        for v in validate_constraints(plan, spec):
+            if v.type is ViolationType.allergy:
+                raise _PlanValidationError(v.message)
     return plan
-
-
-def _normalize(text_value: str) -> str:
-    """Casefold + strip des accents pour matcher 'lait' contre 'Lait écrémé'."""
-    decomposed = unicodedata.normalize("NFD", text_value)
-    stripped = "".join(c for c in decomposed if unicodedata.category(c) != "Mn")
-    return stripped.casefold()
-
-
-def _enforce_allergy_absence(plan: FallbackMealPlan, allergies: list[str]) -> None:
-    """Rejette un plan si un ingredient contient un allergene en mot entier.
-
-    Utilise un match a frontiere de mot (\\b) plutot que substring : evite
-    les faux positifs comme 'lait' contre 'laitue' ou 'oeuf' contre 'boeuf'.
-    """
-    if not allergies:
-        return
-    patterns = [
-        (raw, re.compile(rf"\b{re.escape(_normalize(raw))}\b"))
-        for raw in allergies
-        if raw.strip()
-    ]
-    for day in plan.days:
-        for meal in day.meals:
-            for ing in meal.ingredients:
-                normalized_ing = _normalize(ing)
-                for raw_allergen, pattern in patterns:
-                    if pattern.search(normalized_ing):
-                        raise _PlanValidationError(
-                            f"Allergene {raw_allergen!r} present dans {ing!r}."
-                        )
 
 
 def _build_plan_prompt(inputs: PlanInputs) -> str:
@@ -264,11 +242,15 @@ def _build_plan_prompt(inputs: PlanInputs) -> str:
         objective=inputs.objective,
         diet_type=inputs.diet_type or "aucun",
         allergies=", ".join(sorted(inputs.allergies)) if inputs.allergies else "aucune",
-        calories_target=inputs.calories_target if inputs.calories_target else "non specifiee",
+        calories_target=inputs.calories_target
+        if inputs.calories_target
+        else "non specifiee",
     )
 
 
-def _lookup_cached_plan(db: Session, user_id: int, inputs_hash: str) -> FallbackMealPlan | None:
+def _lookup_cached_plan(
+    db: Session, user_id: int, inputs_hash: str
+) -> FallbackMealPlan | None:
     """Recupere le dernier plan en cache (< 7 jours) pour ce inputs_hash.
 
     Filtre redondant sur user_id : le hash inclut deja user_id, mais l'expliciter
@@ -291,7 +273,9 @@ def _lookup_cached_plan(db: Session, user_id: int, inputs_hash: str) -> Fallback
     return FallbackMealPlan.model_validate(row.plan)
 
 
-def _persist_plan(db: Session, plan: FallbackMealPlan, inputs_hash: str, inputs: PlanInputs) -> None:
+def _persist_plan(
+    db: Session, plan: FallbackMealPlan, inputs_hash: str, inputs: PlanInputs
+) -> None:
     """Insere une ligne meal_plans avec le plan complet et son inputs_hash.
 
     Flush sans commit : la decision de commit revient au caller (handler FastAPI),
