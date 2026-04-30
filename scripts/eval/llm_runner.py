@@ -42,7 +42,7 @@ from scripts.eval.plotting import save_latency_distribution_png
 logger = logging.getLogger(__name__)
 
 _OLLAMA_MODEL = "gemma3:4b"
-_OLLAMA_TIMEOUT_S = 30.0
+_OLLAMA_TIMEOUT_S = 180.0
 
 
 _PROMPT_TEMPLATE = (
@@ -237,7 +237,7 @@ def _random_inputs(rng: random.Random, idx: int, with_constraints: bool) -> Plan
     return PlanInputs(
         user_id=1_000_000 + idx,
         objective=objective,
-        duration_days=3,
+        duration_days=1,
         diet_type=diet,
         allergies=allergies,
         budget_per_day=budget,

@@ -30,6 +30,7 @@ _MODEL_ID = "nateraw/food"
 
 _EMPTY_TERRAIN_PAYLOAD: dict[str, Any] = {
     "n_samples": 0,
+    "n_classified": 0,
     "top1_accuracy": 0.0,
     "top5_accuracy": 0.0,
     "unknown_rate": 0.0,
@@ -44,15 +45,14 @@ def run_classifier_eval(
 ) -> dict[str, Any]:
     """Renvoie un payload {food101: ..., terrain: ...} pour metrics.json.
 
-    `seed` est conserve dans la signature publique pour la coherence avec
-    l'eval LLM mais n'est pas utilise : le streaming Food-101 est deterministe
-    et on prend les n_food101 premiers samples.
+    `seed` est utilise pour shuffler le split Food-101 (sinon le streaming
+    sert les classes par ordre alphabetique et un petit n_samples ne couvre
+    que les premieres classes).
     """
-    del seed
     classifier = _load_classifier()
     payload: dict[str, Any] = {}
 
-    payload["food101"] = _eval_food101(classifier, n_food101, output_dir)
+    payload["food101"] = _eval_food101(classifier, n_food101, seed, output_dir)
     payload["terrain"] = _eval_terrain(classifier, terrain_dir)
     return payload
 
@@ -63,18 +63,22 @@ def _load_classifier() -> Any:
     return pipeline("image-classification", model=_MODEL_ID)
 
 
-def _eval_food101(classifier: Any, n_samples: int, output_dir: Path) -> dict[str, Any]:
+def _eval_food101(
+    classifier: Any, n_samples: int, seed: int, output_dir: Path
+) -> dict[str, Any]:
     """Echantillonne n_samples du test split Food-101 et calcule les metriques.
 
-    On prend les `n_samples` premiers du split (deterministe, ordre du dataset
-    streaming) : suffisant pour evaluer le classifier sans charger les 25k
-    images, et reproductible sans avoir besoin de seed.
+    Shuffle avec `seed` (par defaut passe par run_classifier_eval) puis prend
+    les n_samples premiers, sinon le streaming sert les classes par ordre
+    alphabetique (250 images par classe) et un petit n_samples ne couvre que
+    les premieres classes du dataset.
     """
     from datasets import Image as HFImage
     from datasets import load_dataset
 
-    logger.info("food101 : load_dataset (split=validation, streaming)")
+    logger.info("food101 : load_dataset (split=validation, streaming, shuffled seed=%d)", seed)
     ds = load_dataset("food101", split="validation", streaming=True)
+    ds = ds.shuffle(seed=seed, buffer_size=10000)
     ds = ds.cast_column("image", HFImage(decode=False))
 
     samples: list[tuple[Image.Image, str]] = []
