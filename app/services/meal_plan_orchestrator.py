@@ -30,7 +30,8 @@ async def generate(
 
     - Resout health_goal : explicite > profil > balance.
     - Bypass cache si tier in {premium, premium_plus} (issue NUT-5).
-    - Delegue cache + retry + fallback + persistance a llm_client.
+    - Delegue cache + retry + DeCRIM-light + persistance a llm_client.
+    - InfeasibleConstraintsError remontee : le router traduit en HTTP 503.
     """
     health_goal = _resolve_health_goal(request.health_goal, user_id, db)
 
@@ -39,7 +40,7 @@ async def generate(
 
     plan_inputs = _build_inputs(user_id, request, health_goal)
 
-    plan = await generate_plan(
+    plan, compliance_status, compliance_warnings = await generate_plan(
         plan_inputs,
         db,
         bypass_cache=bypass_cache,
@@ -49,7 +50,13 @@ async def generate(
     plan_id = _latest_plan_id(db, user_id, compute_inputs_hash(plan_inputs))
     db.commit()
 
-    return MealPlanResponse(plan_id=plan_id, fallback=plan.fallback, days=plan.days)
+    return MealPlanResponse(
+        plan_id=plan_id,
+        fallback=plan.fallback,
+        days=plan.days,
+        compliance_status=compliance_status.value,
+        compliance_warnings=compliance_warnings,
+    )
 
 
 def _resolve_health_goal(

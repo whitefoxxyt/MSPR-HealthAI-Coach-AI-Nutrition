@@ -932,22 +932,44 @@
   },
   "generated_at": 1777534688,
   "llm": {
-    "constraint_n_plans": 10,
-    "constraint_satisfaction_rate": 0.0,
-    "fallback_rate": 0.0,
-    "hitl": {
-      "mean_coherence": 0.0,
-      "mean_nutrition": 0.0,
-      "mean_originalite": 0.0,
-      "n_ratings": 0
+    "naive": {
+      "_note": "LLM nu (gemma3:4b sans DeCRIM-light). Numeros repris de l'eval pre-slice-7.",
+      "by_constraint": {
+        "allergies": 0.0,
+        "budget": 0.0,
+        "diet": 0.0
+      },
+      "constraint_n_plans": 10,
+      "constraint_satisfaction": 0.0,
+      "fallback_rate": 0.0,
+      "hitl": {
+        "mean_coherence": 0.0,
+        "mean_nutrition": 0.0,
+        "mean_originalite": 0.0,
+        "n_ratings": 0
+      },
+      "json_validity_rate": 1.0,
+      "latency_distribution_png": "docs/llm_latency_distribution.png",
+      "latency_max_ms": 97856.14665799994,
+      "latency_p50_ms": 83654.46811300013,
+      "latency_p95_ms": 95209.65956199996,
+      "n_generations": 30
     },
-    "json_validity_rate": 1.0,
-    "latency": {
-      "max_ms": 97856.14665799994,
-      "p50_ms": 83654.46811300013,
-      "p95_ms": 95209.65956199996
-    },
-    "latency_distribution_png": "docs/llm_latency_distribution.png",
-    "n_generations": 30
+    "pipeline": {
+      "_note": "Structure cible (slice 7). Lancer `python scripts/eval_metrics.py llm` avec Ollama + PG accessibles pour peupler avec des mesures reelles.",
+      "abandoned_503": 0.0,
+      "by_constraint": {
+        "allergies": 0.0,
+        "budget": 0.0,
+        "diet": 0.0
+      },
+      "constraint_satisfaction": 0.0,
+      "latency_p50_ms": 0.0,
+      "latency_p95_ms": 0.0,
+      "n_generations": 0,
+      "partial_compliance": 0.0,
+      "retry_count_distribution": {},
+      "static_fallback": 0.0
+    }
   }
 }
