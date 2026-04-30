@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.schemas import PaginatedAnalysesResponse
 from app.services import jwt_decoder, meal_analysis_history
 from app.services.meal_analysis_orchestrator import analyze_meal as orchestrate
+from app.services.nutrition_engine import MealType
 
 router = APIRouter()
 
@@ -138,6 +148,10 @@ async def analyze_meal(
     photo: UploadFile = File(
         ..., description="Photo du repas (JPEG, PNG ou WebP, 10 Mo max)."
     ),
+    meal_type: MealType | None = Form(
+        default=None,
+        description="breakfast / lunch / dinner / snack. Defaut : fallback TDEE/4.",
+    ),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
@@ -153,7 +167,7 @@ async def analyze_meal(
         )
 
     user_id = _user_id_from_auth(authorization)
-    return await orchestrate(image_bytes, user_id, db)
+    return await orchestrate(image_bytes, user_id, db, meal_type=meal_type)
 
 
 @router.get(

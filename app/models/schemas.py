@@ -271,6 +271,10 @@ class MealAnalysisResponse(BaseModel):
     fallback: bool
     profile_completion_required: bool
     missing_fields: list[str] = []
+    # Slice 8 PRD #45 : 3 portions PNNS (small/medium/large) par aliment
+    # detecte, macros recalculees au prorata des grammes.
+    serving_sizes: list[list["ServingSize"]] = []
+    warnings: list[str] = []
 
 
 # Tailles de portion PNNS (issue NUT-49). Cf. app/data/portion_sizes.py.
@@ -292,3 +296,7 @@ class ServingSize(BaseModel):
     label: ServingSizeLabel
     grams: int = Field(gt=0)
     description: str | None = None
+    # Macros recalculees pour cette portion (slice 8 PRD #45). None pour les
+    # entrees PNNS de reference (portion_sizes), populee par l'orchestrator
+    # quand l'aliment a des macros lookup en BDD.
+    macros: dict[str, float] | None = None
