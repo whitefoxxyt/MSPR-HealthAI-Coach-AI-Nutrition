@@ -17,7 +17,10 @@ from app.services.constraint_validator import (
 )
 from app.services.fallback_loader import load_fallback_plan
 
-_OLLAMA_TIMEOUT_S = 30.0
+# 180s : Gemma3:4b sur CPU avec few-shot (issue #55) prend p50 ~85-95s, p95 ~120s
+# pour le 1er token. Le timeout d'origine 30s declenchait systematiquement le
+# fallback statique en eval pipeline (cf. slice 9). Aligne sur le runner naive.
+_OLLAMA_TIMEOUT_S = 180.0
 _OLLAMA_MODEL = "gemma3:4b"
 
 
