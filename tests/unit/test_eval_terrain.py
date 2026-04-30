@@ -104,9 +104,9 @@ def test_eval_terrain_top1_miss_top5_hit(tmp_path: Path) -> None:
 
     assert payload["n_samples"] == 1
     assert payload["n_classified"] == 1
-    assert payload["top1_accuracy"] == 0.0
-    assert payload["top5_accuracy"] == 1.0
-    assert payload["unknown_rate"] == 0.0
+    assert payload["top1_accuracy"] == pytest.approx(0.0)
+    assert payload["top5_accuracy"] == pytest.approx(1.0)
+    assert payload["unknown_rate"] == pytest.approx(0.0)
 
 
 def test_eval_terrain_unknown_label_only_contributes_to_unknown_rate(
@@ -173,9 +173,9 @@ def test_eval_terrain_skips_missing_image_files(tmp_path: Path) -> None:
     # La distinction evite que le report annonce "1.0 sur 2 echantillons".
     assert payload["n_samples"] == 2
     assert payload["n_classified"] == 1
-    assert payload["top1_accuracy"] == 1.0
-    assert payload["top5_accuracy"] == 1.0
-    assert payload["unknown_rate"] == 0.0
+    assert payload["top1_accuracy"] == pytest.approx(1.0)
+    assert payload["top5_accuracy"] == pytest.approx(1.0)
+    assert payload["unknown_rate"] == pytest.approx(0.0)
 
 
 def test_eval_terrain_only_unknown_samples_yields_zero_accuracy(tmp_path: Path) -> None:

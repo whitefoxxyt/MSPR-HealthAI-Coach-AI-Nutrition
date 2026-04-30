@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.models.schemas import FallbackMealPlan
 from app.services.constraint_validator import (
     ConstraintSpec,
@@ -98,7 +100,7 @@ def test_budget_exceeded_reports_day_total() -> None:
     assert v.type is ViolationType.budget
     assert v.day == 2
     assert v.meal_index is None
-    assert v.ingredient_or_amount == 12.0
+    assert v.ingredient_or_amount == pytest.approx(12.0)
     assert "10" in v.message  # mentionne la limite
 
 
@@ -183,7 +185,9 @@ def test_multi_violations_are_all_reported_no_short_circuit() -> None:
     )
     # Budget jour 1 = 13 EUR > 10 EUR
     assert any(
-        v.day == 1 and v.meal_index is None and v.ingredient_or_amount == 13.0
+        v.day == 1
+        and v.meal_index is None
+        and v.ingredient_or_amount == pytest.approx(13.0)
         for v in by_type[ViolationType.budget]
     )
     # Le jour 2 est conforme : pas de violation jour 2

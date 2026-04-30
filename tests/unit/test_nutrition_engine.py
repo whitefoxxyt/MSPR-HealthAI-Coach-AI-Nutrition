@@ -194,9 +194,9 @@ def test_anses_rnp_constants_match_official_values() -> None:
     # avis 2017-SA-0142). Sources figees pour `imbalance_detector` (slice 5).
     from app import config
 
-    assert config.RNP_PROTEIN_G_PER_KG == 0.83
+    assert config.RNP_PROTEIN_G_PER_KG == pytest.approx(0.83)
     assert config.RNP_FIBER_G_PER_DAY == 30
-    assert config.RNP_AGS_PERCENT_OF_AET_MAX == 0.12
+    assert config.RNP_AGS_PERCENT_OF_AET_MAX == pytest.approx(0.12)
     assert config.RNP_TOTAL_SUGARS_G_MAX == 100
 
 
@@ -246,6 +246,6 @@ def test_build_user_profile_with_complete_source_returns_user_profile() -> None:
     assert isinstance(result, UserProfile)
     assert result.gender is Gender.female
     assert result.age == 25
-    assert result.weight_kg == 60.0
-    assert result.height_cm == 165.0
+    assert result.weight_kg == pytest.approx(60.0)
+    assert result.height_cm == pytest.approx(165.0)
     assert result.activity_level is ActivityLevel.light
