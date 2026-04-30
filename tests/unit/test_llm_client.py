@@ -12,15 +12,11 @@ from sqlalchemy import text
 
 from app.models.schemas import (
     FallbackMealPlan,
-    HealthGoal,
-    Imbalance,
     PlanInputs,
-    RecommendationContext,
 )
 from app.services.llm_client import (
     compute_inputs_hash,
     generate_plan,
-    generate_recommendation,
 )
 
 
@@ -102,7 +98,9 @@ def test_inputs_hash_returns_sha256_hex_string() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_plan_success_first_try(db_session, mock_ollama: respx.MockRouter) -> None:
+async def test_generate_plan_success_first_try(
+    db_session, mock_ollama: respx.MockRouter
+) -> None:
     inputs = PlanInputs(user_id=42, objective="balance", duration_days=7)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(_valid_plan_dict())
@@ -202,7 +200,9 @@ async def test_generate_plan_falls_back_after_max_attempts(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     inputs = PlanInputs(user_id=20, objective="weight_loss", duration_days=1)
-    mock_ollama.post(re.compile(r".*/api/generate$")).respond(500, json={"error": "boom"})
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        500, json={"error": "boom"}
+    )
 
     fallback_calls: list[tuple[str, str]] = []
 
@@ -261,7 +261,9 @@ async def test_generate_plan_fallback_without_loader_returns_empty_plan(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     inputs = PlanInputs(user_id=22, objective="balance", duration_days=1)
-    mock_ollama.post(re.compile(r".*/api/generate$")).respond(500, json={"error": "boom"})
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        500, json={"error": "boom"}
+    )
 
     plan = await generate_plan(inputs, db_session)
 
@@ -503,7 +505,8 @@ async def test_generate_plan_semaphore_limits_concurrent_ollama_calls(
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(side_effect=slow_handler)
 
     inputs_list = [
-        PlanInputs(user_id=50 + i, objective="balance", duration_days=1) for i in range(4)
+        PlanInputs(user_id=50 + i, objective="balance", duration_days=1)
+        for i in range(4)
     ]
     plans = await asyncio.gather(*(generate_plan(i, db_session) for i in inputs_list))
 
@@ -512,97 +515,6 @@ async def test_generate_plan_semaphore_limits_concurrent_ollama_calls(
     assert max_observed <= 2  # bornage du semaphore
 
 
-# generate_recommendation
-
-
-@pytest.mark.asyncio
-async def test_generate_recommendation_returns_text_on_success(
-    db_session, mock_ollama: respx.MockRouter
-) -> None:
-    ctx = RecommendationContext(
-        user_id=70, imbalance=Imbalance.protein_low, health_goal=HealthGoal.muscle_gain
-    )
-    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
-        200,
-        json={"response": "Augmente ton apport en proteines avec du poulet.", "done": True},
-    )
-
-    text_reco = await generate_recommendation(ctx, db_session)
-
-    assert isinstance(text_reco, str)
-    assert "proteines" in text_reco
-
-
-@pytest.mark.asyncio
-async def test_generate_recommendation_falls_back_on_total_failure(
-    db_session, mock_ollama: respx.MockRouter
-) -> None:
-    ctx = RecommendationContext(
-        user_id=71, imbalance=Imbalance.carbs_high, health_goal=HealthGoal.weight_loss
-    )
-    mock_ollama.post(re.compile(r".*/api/generate$")).respond(500, json={"error": "boom"})
-
-    fallback_calls: list[tuple[Imbalance, HealthGoal]] = []
-
-    def fb(imb: Imbalance, goal: HealthGoal) -> str:
-        fallback_calls.append((imb, goal))
-        return "Reduis les feculents pour atteindre ton objectif."
-
-    text_reco = await generate_recommendation(ctx, db_session, fallback=fb)
-
-    assert text_reco == "Reduis les feculents pour atteindre ton objectif."
-    assert fallback_calls == [(Imbalance.carbs_high, HealthGoal.weight_loss)]
-
-
-@pytest.mark.asyncio
-async def test_generate_recommendation_retries_then_succeeds(
-    db_session, mock_ollama: respx.MockRouter
-) -> None:
-    ctx = RecommendationContext(
-        user_id=72, imbalance=Imbalance.balanced, health_goal=HealthGoal.balance
-    )
-    mock_ollama.post(re.compile(r".*/api/generate$")).mock(
-        side_effect=[
-            httpx.Response(500, json={"error": "boom"}),
-            httpx.Response(200, json={"response": "Continue ainsi.", "done": True}),
-        ]
-    )
-
-    text_reco = await generate_recommendation(ctx, db_session)
-
-    assert text_reco == "Continue ainsi."
-
-
-@pytest.mark.asyncio
-async def test_generate_recommendation_treats_empty_text_as_failure(
-    db_session, mock_ollama: respx.MockRouter
-) -> None:
-    ctx = RecommendationContext(
-        user_id=74, imbalance=Imbalance.balanced, health_goal=HealthGoal.balance
-    )
-    mock_ollama.post(re.compile(r".*/api/generate$")).mock(
-        side_effect=[
-            httpx.Response(200, json={"response": "   ", "done": True}),
-            httpx.Response(200, json={"response": "Bois plus d'eau.", "done": True}),
-        ]
-    )
-
-    text_reco = await generate_recommendation(ctx, db_session)
-
-    assert text_reco == "Bois plus d'eau."
-
-
-@pytest.mark.asyncio
-async def test_generate_recommendation_fallback_default_when_no_callable(
-    db_session, mock_ollama: respx.MockRouter
-) -> None:
-    ctx = RecommendationContext(
-        user_id=73, imbalance=Imbalance.fat_high, health_goal=HealthGoal.sport_performance
-    )
-    mock_ollama.post(re.compile(r".*/api/generate$")).respond(500, json={"error": "boom"})
-
-    text_reco = await generate_recommendation(ctx, db_session)
-
-    # Sans fallback explicite, on retourne une chaine non vide degradee.
-    assert isinstance(text_reco, str)
-    assert text_reco != ""
+# Tests generate_recommendation : voir tests/unit/test_llm_recommendation.py
+# (signature refactoree par l'issue #51 : list[ImbalanceTag] au lieu de
+# RecommendationContext, 1 seul appel Ollama au lieu de N).

@@ -131,13 +131,20 @@ def build_user_profile(source: object | None) -> UserProfile | IncompleteProfile
     )
 
 
+def meal_quota(meal_type: MealType | None) -> float:
+    """Part du TDEE/RNP allouee a un repas. Source unique pour les modules
+    qui repartissent une cible journaliere (calories, macros, fibres)."""
+    if meal_type is None:
+        return _FALLBACK_MEAL_QUOTA
+    return _MEAL_QUOTAS[meal_type]
+
+
 def compute_meal_targets(
     profile: UserProfile,
     meal_type: MealType | None,
     health_goal: HealthGoal,
 ) -> MealTargets:
-    # Fallback : meal_type absent -> repartition uniforme sur 4 prises.
-    quota = _MEAL_QUOTAS[meal_type] if meal_type is not None else _FALLBACK_MEAL_QUOTA
+    quota = meal_quota(meal_type)
     daily = compute_macro_targets(compute_tdee(profile), health_goal)
     return MealTargets(
         calories=daily.calories * quota,
