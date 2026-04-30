@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Column, DateTime, Integer, Numeric, String, text
+from sqlalchemy import BigInteger, Column, DateTime, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase
 
@@ -25,6 +25,13 @@ class MealAnalysis(Base):
     recommendations = Column(JSONB, nullable=False, server_default=text("'[]'"))
     # Cle de cache (top_food_label, health_goal, imbalances). 30 jours TTL (V10).
     recommendations_hash = Column(String(64))
+    # Tags structures {nutrient, status, delta_pct, target_value, actual_value, unit} (V11).
+    # Liste vide quand le profil utilisateur est incomplet (TDEE non calculable).
+    imbalances = Column(JSONB)
+    # 3 portions (small/medium/large) par item detecte avec macros recalculees (V11).
+    serving_sizes = Column(JSONB)
+    # breakfast/lunch/dinner/snack ; NULL = fallback TDEE/4 (V11).
+    meal_type = Column(Text)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
@@ -38,6 +45,10 @@ class MealPlan(Base):
     constraints = Column(JSONB, nullable=False, server_default=text("'{}'"))
     # SHA256 des inputs canonicalises ; cle de cache (V9). Index dedie en BDD.
     inputs_hash = Column(String(64))
+    # Sortie de la boucle DeCRIM-light : full / partial_budget / static_fallback (V11).
+    compliance_status = Column(Text, nullable=False, server_default=text("'full'"))
+    # Strings explicitant les relachements de contraintes (V11).
+    compliance_warnings = Column(ARRAY(Text))
     generated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
