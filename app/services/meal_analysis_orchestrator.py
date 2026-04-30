@@ -310,6 +310,7 @@ def _serving_sizes_for(
         {
             "label": p.label.value,
             "grams": p.grams,
+            "description": p.description,
             "macros": _scale_macros(nutrition, p.grams),
         }
         for p in portions

@@ -548,3 +548,44 @@ def test_analyze_meal_macros_match_medium_portion_of_top_food(
     # Les macros agreges du repas correspondent exactement a la portion medium.
     assert body["macros"]["calories"] == pytest.approx(medium["macros"]["calories"])
     assert body["macros"]["protein_g"] == pytest.approx(medium["macros"]["protein_g"])
+
+
+def test_analyze_meal_unmapped_food_label_falls_back_to_single_medium_portion(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_ollama: respx.MockRouter,
+    valid_jwt: Callable[..., str],
+) -> None:
+    """Label hors mapping PNNS : portion_sizes renvoie 1 seule portion medium 100 g."""
+    user_id = 65
+    db_session.execute(
+        text(
+            "INSERT INTO nutrition_entries "
+            "(food_name, calories, protein_g, carbs_g, fat_g, fiber_g, source) "
+            "VALUES ('mystery_food', 200, 10, 20, 5, 2, 'TEST')"
+        )
+    )
+    db_session.commit()
+    _seed_full_profile(db_session, user_id)
+    _patch_classifier(monkeypatch, [("mystery_food", 0.9)])
+
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json={"response": "ok.", "done": True}
+    )
+
+    response = client.post(
+        "/api/v1/analyze-meal",
+        files={"photo": ("pizza.png", _png_bytes(), "image/png")},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=user_id)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    portions = body["serving_sizes"][0]
+    assert len(portions) == 1
+    assert portions[0]["label"] == "medium"
+    assert portions[0]["grams"] == 100
+    # Macros = lookup direct (factor 1.0) puisque la portion fallback fait 100 g.
+    assert body["macros"]["calories"] == pytest.approx(200)
