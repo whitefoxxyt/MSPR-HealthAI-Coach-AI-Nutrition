@@ -792,6 +792,6 @@ def test_compliance_persisted_to_meal_plans_table(
     ).fetchone()
     assert row is not None
     assert row.compliance_status == "full"
-    # Liste vide en BDD : NULL ou tableau vide selon la version, on accepte
-    # les deux (le contrat client est "compliance_warnings: list" cote API).
-    assert row.compliance_warnings in (None, [])
+    # _persist_plan envoie systematiquement une liste (eventuellement vide)
+    # cote SQLAlchemy : Postgres stocke un ARRAY vide, jamais NULL.
+    assert row.compliance_warnings == []

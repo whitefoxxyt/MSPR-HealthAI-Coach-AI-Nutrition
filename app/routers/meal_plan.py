@@ -123,7 +123,18 @@ _PLAN_RESPONSE_EXAMPLE = {
             "description": (
                 "Contraintes infaisables (allergies / regime impossibles a satisfaire) "
                 "ou Ollama injoignable et fallback statique indisponible."
-            )
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": (
+                            "Contraintes infaisables, ajustez vos contraintes "
+                            "(allergies / regime)."
+                        ),
+                        "infeasible": True,
+                    }
+                }
+            },
         },
     },
 )
@@ -133,7 +144,7 @@ async def generate_meal_plan(
     payload: MealPlanRequest = Body(..., openapi_examples=_PLAN_REQUEST_EXAMPLES),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> MealPlanResponse:
+) -> MealPlanResponse | JSONResponse:
     user_id, token = _auth(authorization)
     try:
         return await meal_plan_orchestrator.generate(user_id, payload, token, db)

@@ -117,6 +117,9 @@ async def generate_plan(
             async with _OLLAMA_SEMAPHORE:
                 plan, status = await generate_with_retry(inputs)
         except InfeasibleConstraintsError:
+            # On trace l'attempt avant de remonter pour que les ops puissent
+            # correler la latence et l'inputs_hash avec le 503 cote router.
+            _log_call(inputs_hash, start, attempt, "infeasible")
             raise
         except (httpx.HTTPError, json.JSONDecodeError, ValidationError) as exc:
             last_error = exc

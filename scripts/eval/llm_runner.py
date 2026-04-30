@@ -247,13 +247,13 @@ async def _count_ollama_calls(orchestrator_module: Any) -> AsyncIterator[dict[st
 
 
 @contextlib.contextmanager
-def _ephemeral_session(SessionLocal: Any) -> Any:
+def _ephemeral_session(session_factory: Any) -> Any:
     """Session SQLAlchemy ouverte/fermee proprement, rollback en sortie.
 
     On rollback en fin de boucle : on ne veut pas polluer la BDD avec les
     plans d'eval (les resultats sont aggreges en memoire et exportes en JSON).
     """
-    db = SessionLocal()
+    db = session_factory()
     try:
         yield db
     finally:

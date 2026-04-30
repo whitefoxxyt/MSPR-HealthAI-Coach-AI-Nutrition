@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from app.models.schemas import FallbackMealPlan
 from scripts.eval.llm_metrics import (
     ConstraintCheck,
@@ -238,17 +240,17 @@ def test_compliance_status_breakdown_decodes_outcomes() -> None:
 
     result = compliance_status_breakdown(outcomes)
 
-    assert result["full"] == 0.4
-    assert result["partial_budget"] == 0.2
-    assert result["static_fallback"] == 0.2
-    assert result["abandoned_503"] == 0.2
+    assert result["full"] == pytest.approx(0.4)
+    assert result["partial_budget"] == pytest.approx(0.2)
+    assert result["static_fallback"] == pytest.approx(0.2)
+    assert result["abandoned_503"] == pytest.approx(0.2)
 
 
 def test_compliance_status_breakdown_empty_returns_zeros_with_all_keys() -> None:
     result = compliance_status_breakdown([])
 
     assert set(result) == {"full", "partial_budget", "static_fallback", "abandoned_503"}
-    assert all(v == 0.0 for v in result.values())
+    assert all(v == pytest.approx(0.0) for v in result.values())
 
 
 def test_retry_count_distribution_buckets_by_call_count() -> None:

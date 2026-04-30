@@ -115,93 +115,91 @@ def _render_llm_section(data: dict[str, Any]) -> list[str]:
         naive = data
 
     if naive:
-        out.append("### Niveau naive (LLM nu, sans DeCRIM-light)")
-        out.append("")
-        out.append(
-            f"- Taux de validite JSON (1er essai) : "
-            f"{naive.get('json_validity_rate', 0.0):.4f}"
-        )
-        out.append(
-            f"- Taux d'invocation Fallback : {naive.get('fallback_rate', 0.0):.4f}"
-        )
-        out.append(
-            f"- Latence : p50 {naive.get('latency_p50_ms', 0.0):.0f} ms, "
-            f"p95 {naive.get('latency_p95_ms', 0.0):.0f} ms, "
-            f"max {naive.get('latency_max_ms', 0.0):.0f} ms"
-        )
-        out.append(
-            f"- Respect simultanee allergies + budget + regime : "
-            f"{naive.get('constraint_satisfaction', 0.0):.4f}"
-        )
-        by_c = naive.get("by_constraint") or {}
-        if by_c:
-            out.append(
-                f"- Par contrainte : allergies {by_c.get('allergies', 0.0):.4f}, "
-                f"budget {by_c.get('budget', 0.0):.4f}, "
-                f"regime {by_c.get('diet', 0.0):.4f}"
-            )
-        out.append("")
-
-        hitl = naive.get("hitl") or {}
-        if hitl:
-            out.append("#### Evaluation qualitative humaine (HITL, 1-5)")
-            out.append("")
-            out.append(f"- N ratings : {hitl.get('n_ratings', 0)}")
-            out.append(
-                f"- Pertinence nutrition : {hitl.get('mean_nutrition', 0.0):.2f}"
-            )
-            out.append(f"- Originalite : {hitl.get('mean_originalite', 0.0):.2f}")
-            out.append(f"- Coherence : {hitl.get('mean_coherence', 0.0):.2f}")
-            out.append("")
-
-        latency_png = naive.get("latency_distribution_png")
-        if latency_png:
-            out.append(f"![Distribution latence LLM]({latency_png})")
-            out.append("")
-
+        out.extend(_render_naive_block(naive))
     if pipeline:
-        out.append("### Niveau pipeline (DeCRIM-light + cache bypass)")
-        out.append("")
-        out.append(
-            f"- N generations : {pipeline.get('n_generations', 0)}"
-        )
-        out.append(
-            f"- compliance_status full : "
-            f"{pipeline.get('constraint_satisfaction', 0.0):.4f}"
-        )
-        out.append(
-            f"- compliance_status partial_budget : "
-            f"{pipeline.get('partial_compliance', 0.0):.4f}"
-        )
-        out.append(
-            f"- compliance_status static_fallback : "
-            f"{pipeline.get('static_fallback', 0.0):.4f}"
-        )
-        out.append(
-            f"- abandoned_503 (contraintes infaisables) : "
-            f"{pipeline.get('abandoned_503', 0.0):.4f}"
-        )
-        by_c = pipeline.get("by_constraint") or {}
-        if by_c:
-            out.append(
-                f"- Par contrainte : allergies {by_c.get('allergies', 0.0):.4f}, "
-                f"budget {by_c.get('budget', 0.0):.4f}, "
-                f"regime {by_c.get('diet', 0.0):.4f}"
-            )
-        out.append(
-            f"- Latence : p50 {pipeline.get('latency_p50_ms', 0.0):.0f} ms, "
-            f"p95 {pipeline.get('latency_p95_ms', 0.0):.0f} ms"
-        )
-        rcd = pipeline.get("retry_count_distribution") or {}
-        if rcd:
-            buckets = ", ".join(f"{k} retry: {v}" for k, v in sorted(rcd.items()))
-            out.append(f"- Distribution retries : {buckets}")
-        out.append("")
-
+        out.extend(_render_pipeline_block(pipeline))
     if naive and pipeline:
         out.extend(_render_naive_vs_pipeline_comparison(naive, pipeline))
 
     return out
+
+
+def _render_naive_block(naive: dict[str, Any]) -> list[str]:
+    out: list[str] = [
+        "### Niveau naive (LLM nu, sans DeCRIM-light)",
+        "",
+        f"- Taux de validite JSON (1er essai) : "
+        f"{naive.get('json_validity_rate', 0.0):.4f}",
+        f"- Taux d'invocation Fallback : {naive.get('fallback_rate', 0.0):.4f}",
+        f"- Latence : p50 {naive.get('latency_p50_ms', 0.0):.0f} ms, "
+        f"p95 {naive.get('latency_p95_ms', 0.0):.0f} ms, "
+        f"max {naive.get('latency_max_ms', 0.0):.0f} ms",
+        f"- Respect simultanee allergies + budget + regime : "
+        f"{naive.get('constraint_satisfaction', 0.0):.4f}",
+    ]
+    by_c = naive.get("by_constraint") or {}
+    if by_c:
+        out.append(_format_by_constraint_line(by_c))
+    out.append("")
+
+    out.extend(_render_hitl_block(naive.get("hitl") or {}))
+
+    latency_png = naive.get("latency_distribution_png")
+    if latency_png:
+        out.append(f"![Distribution latence LLM]({latency_png})")
+        out.append("")
+    return out
+
+
+def _render_hitl_block(hitl: dict[str, Any]) -> list[str]:
+    if not hitl:
+        return []
+    return [
+        "#### Evaluation qualitative humaine (HITL, 1-5)",
+        "",
+        f"- N ratings : {hitl.get('n_ratings', 0)}",
+        f"- Pertinence nutrition : {hitl.get('mean_nutrition', 0.0):.2f}",
+        f"- Originalite : {hitl.get('mean_originalite', 0.0):.2f}",
+        f"- Coherence : {hitl.get('mean_coherence', 0.0):.2f}",
+        "",
+    ]
+
+
+def _render_pipeline_block(pipeline: dict[str, Any]) -> list[str]:
+    out: list[str] = [
+        "### Niveau pipeline (DeCRIM-light + cache bypass)",
+        "",
+        f"- N generations : {pipeline.get('n_generations', 0)}",
+        f"- compliance_status full : "
+        f"{pipeline.get('constraint_satisfaction', 0.0):.4f}",
+        f"- compliance_status partial_budget : "
+        f"{pipeline.get('partial_compliance', 0.0):.4f}",
+        f"- compliance_status static_fallback : "
+        f"{pipeline.get('static_fallback', 0.0):.4f}",
+        f"- abandoned_503 (contraintes infaisables) : "
+        f"{pipeline.get('abandoned_503', 0.0):.4f}",
+    ]
+    by_c = pipeline.get("by_constraint") or {}
+    if by_c:
+        out.append(_format_by_constraint_line(by_c))
+    out.append(
+        f"- Latence : p50 {pipeline.get('latency_p50_ms', 0.0):.0f} ms, "
+        f"p95 {pipeline.get('latency_p95_ms', 0.0):.0f} ms"
+    )
+    rcd = pipeline.get("retry_count_distribution") or {}
+    if rcd:
+        buckets = ", ".join(f"{k} retry: {v}" for k, v in sorted(rcd.items()))
+        out.append(f"- Distribution retries : {buckets}")
+    out.append("")
+    return out
+
+
+def _format_by_constraint_line(by_c: dict[str, Any]) -> str:
+    return (
+        f"- Par contrainte : allergies {by_c.get('allergies', 0.0):.4f}, "
+        f"budget {by_c.get('budget', 0.0):.4f}, "
+        f"regime {by_c.get('diet', 0.0):.4f}"
+    )
 
 
 def _render_naive_vs_pipeline_comparison(
