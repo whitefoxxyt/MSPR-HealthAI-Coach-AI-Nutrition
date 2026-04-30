@@ -13,9 +13,10 @@ from testcontainers.postgres import PostgresContainer
 from app.config import settings
 from app.models.schemas import (
     HealthGoal,
-    Imbalance,
+    ImbalanceStatus,
+    ImbalanceTag,
+    Nutrient,
     PlanInputs,
-    RecommendationContext,
 )
 from app.services.llm_client import generate_plan, generate_recommendation
 
@@ -81,13 +82,22 @@ async def test_generate_recommendation_with_real_ollama(
     real_db_session: Session, ollama_host: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(settings, "ollama_host", ollama_host)
-    ctx = RecommendationContext(
-        user_id=998,
-        imbalance=Imbalance.protein_low,
-        health_goal=HealthGoal.muscle_gain,
-    )
+    tags = [
+        ImbalanceTag(
+            nutrient=Nutrient.protein_g,
+            status=ImbalanceStatus.deficit,
+            delta_pct=-0.40,
+            target_value=50.0,
+            actual_value=30.0,
+            unit="g",
+        )
+    ]
 
-    text_reco = await generate_recommendation(ctx, real_db_session)
+    text_reco = await generate_recommendation(
+        ctx_list=tags,
+        health_goal=HealthGoal.muscle_gain,
+        db=real_db_session,
+    )
 
     assert isinstance(text_reco, str)
     assert len(text_reco) > 0

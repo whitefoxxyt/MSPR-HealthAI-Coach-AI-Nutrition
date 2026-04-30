@@ -215,18 +215,6 @@ class PaginatedPlansResponse(BaseModel):
 # LLM client : inputs / outputs (issue NUT-7).
 
 
-class Imbalance(str, Enum):
-    balanced = "balanced"
-    protein_low = "protein_low"
-    protein_high = "protein_high"
-    carbs_low = "carbs_low"
-    carbs_high = "carbs_high"
-    fat_low = "fat_low"
-    fat_high = "fat_high"
-    calories_low = "calories_low"
-    calories_high = "calories_high"
-
-
 # Inputs pour la generation de plan repas. allergies est triee dans
 # canonicalize_inputs avant calcul du hash.
 class PlanInputs(BaseModel):
@@ -239,10 +227,50 @@ class PlanInputs(BaseModel):
     calories_target: int | None = None
 
 
-class RecommendationContext(BaseModel):
-    user_id: int
-    imbalance: Imbalance
-    health_goal: HealthGoal
+# Imbalance tags structures (issue #51, slice 5 PRD #45).
+# Remplacent l'ancien enum Imbalance + phrases. Le detector emet des tags ;
+# imbalance_to_text les convertit en francais ; le LLM en fait une synthese.
+
+
+class Nutrient(str, Enum):
+    calories = "calories"
+    protein_g = "protein_g"
+    carbs_g = "carbs_g"
+    fat_g = "fat_g"
+    fibers_g = "fibers_g"
+    saturated_fat_g = "saturated_fat_g"
+
+
+class ImbalanceStatus(str, Enum):
+    excess = "excess"
+    deficit = "deficit"
+    ok = "ok"
+
+
+class ImbalanceTag(BaseModel):
+    nutrient: Nutrient
+    status: ImbalanceStatus
+    # Ecart relatif a la cible : (actual - target) / target. Positif si excess,
+    # negatif si deficit. ok -> 0 (le tag n'est generalement pas emis dans ce cas).
+    delta_pct: float
+    target_value: float
+    actual_value: float
+    unit: str
+
+
+# Reponse de POST /analyze-meal (issue #51, slice 5 PRD #45).
+
+
+class MealAnalysisResponse(BaseModel):
+    analysis_id: int
+    detected_foods: list[dict[str, Any]]
+    macros: dict[str, float]
+    imbalances: list[ImbalanceTag]
+    imbalances_text: list[str]
+    recommendations: list[str]
+    fallback: bool
+    profile_completion_required: bool
+    missing_fields: list[str] = []
 
 
 # Tailles de portion PNNS (issue NUT-49). Cf. app/data/portion_sizes.py.
