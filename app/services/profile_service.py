@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from enum import Enum
+
 from sqlalchemy.orm import Session
 
 from app.db.models import NutritionGoal
@@ -27,9 +29,10 @@ def upsert_profile(
 
 
 def _normalize(fields: dict) -> dict:
-    # Pydantic serialise l'enum HealthGoal en str via model_dump(mode="python") par defaut,
-    # mais on stocke la valeur de l'enum (str) dans la colonne VARCHAR(30).
-    health_goal = fields.get("health_goal")
-    if health_goal is not None and hasattr(health_goal, "value"):
-        return {**fields, "health_goal": health_goal.value}
-    return fields
+    # Pydantic serialise les enums en instances via model_dump(mode="python") par defaut.
+    # On extrait .value pour stocker le string brut dans les colonnes VARCHAR
+    # (health_goal, gender, activity_level, diet_type, ...).
+    return {
+        key: value.value if isinstance(value, Enum) else value
+        for key, value in fields.items()
+    }
