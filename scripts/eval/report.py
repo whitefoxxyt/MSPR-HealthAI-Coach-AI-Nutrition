@@ -62,9 +62,19 @@ def _render_classifier_section(data: dict[str, Any]) -> list[str]:
     if terrain:
         out.append("### Terrain (photos telephone, eval HITL)")
         out.append("")
-        out.append(f"- N samples : {terrain.get('n_samples', 0)}")
-        out.append(f"- Top-1 accuracy : {terrain.get('top1_accuracy', 0.0):.4f}")
-        out.append(f"- Top-5 accuracy : {terrain.get('top5_accuracy', 0.0):.4f}")
+        out.append(f"- N samples (CSV) : {terrain.get('n_samples', 0)}")
+        out.append(
+            f"- N classifies (hors `unknown` et images manquantes) : "
+            f"{terrain.get('n_classified', 0)}"
+        )
+        out.append(
+            f"- Top-1 accuracy (sur les classifies) : "
+            f"{terrain.get('top1_accuracy', 0.0):.4f}"
+        )
+        out.append(
+            f"- Top-5 accuracy (sur les classifies) : "
+            f"{terrain.get('top5_accuracy', 0.0):.4f}"
+        )
         out.append(
             f"- Unknown_rate (plats hors-distribution Food-101) : "
             f"{terrain.get('unknown_rate', 0.0):.4f}"

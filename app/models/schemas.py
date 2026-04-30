@@ -86,10 +86,12 @@ class NutritionGoalRequest(BaseModel):
     allergies: list[str] = []
     diet_type: str | None = None
     # Biometrie (V12) : entree pour le calcul du TDEE par nutrition_engine.
+    # gt=0 : Mifflin-St Jeor n'a pas de sens sur des valeurs nulles ou negatives,
+    # on rejette des l'API plutot que de calculer un TDEE absurde plus tard.
     gender: Gender | None = None
-    age: int | None = None
-    weight_kg: Decimal | None = None
-    height_cm: Decimal | None = None
+    age: int | None = Field(default=None, gt=0)
+    weight_kg: Decimal | None = Field(default=None, gt=0)
+    height_cm: Decimal | None = Field(default=None, gt=0)
     activity_level: ActivityLevel | None = None
 
 
@@ -253,6 +255,12 @@ class ServingSizeLabel(str, Enum):
 
 
 class ServingSize(BaseModel):
+    # frozen=True : portion_sizes.get_serving_sizes renvoie list(...) (defense
+    # niveau liste) mais les ServingSize sont partagees avec le cache global
+    # _PNNS_SERVING_SIZES. Sans frozen, un caller peut faire `p[0].grams = 999`
+    # et corrompre la table de reference.
+    model_config = {"frozen": True}
+
     label: ServingSizeLabel
     grams: int = Field(gt=0)
     description: str | None = None

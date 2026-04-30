@@ -115,6 +115,7 @@ def test_render_metrics_md_includes_terrain_unknown_rate(tmp_path: Path) -> None
             },
             "terrain": {
                 "n_samples": 50,
+                "n_classified": 45,
                 "top1_accuracy": 0.45,
                 "top5_accuracy": 0.7,
                 "unknown_rate": 0.1,
@@ -128,3 +129,35 @@ def test_render_metrics_md_includes_terrain_unknown_rate(tmp_path: Path) -> None
     content = out.read_text(encoding="utf-8")
     assert "unknown_rate" in content.lower() or "hors-distribution" in content.lower()
     assert "0.10" in content or "10.0" in content or "10 %" in content
+
+
+def test_render_metrics_md_distinguishes_n_samples_from_n_classified(
+    tmp_path: Path,
+) -> None:
+    # Garde-fou : le report doit afficher les DEUX comptes pour eviter
+    # qu'un lecteur lise "top-1 1.0 sur 50 echantillons" alors qu'un
+    # sous-ensemble seulement a ete classifie (unknown + images manquantes).
+    payload = {
+        "classifier": {
+            "food101": {
+                "top1_accuracy": 0.71,
+                "top5_accuracy": 0.92,
+                "n_samples": 1000,
+            },
+            "terrain": {
+                "n_samples": 50,
+                "n_classified": 30,
+                "top1_accuracy": 0.45,
+                "top5_accuracy": 0.7,
+                "unknown_rate": 0.4,
+            },
+        }
+    }
+    out = tmp_path / "metrics.md"
+
+    render_metrics_md(payload, out)
+
+    content = out.read_text(encoding="utf-8")
+    assert "50" in content  # n_samples
+    assert "30" in content  # n_classified
+    assert "classifies" in content.lower()

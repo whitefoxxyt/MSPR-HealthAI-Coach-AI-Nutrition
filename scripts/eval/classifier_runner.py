@@ -168,9 +168,15 @@ def _eval_terrain(classifier: Any, terrain_dir: Path) -> dict[str, Any]:
         truths.append(sample.label)
 
     unknown_rate = n_unknown / n_samples if n_samples else 0.0
+    # n_classified : combien d'images ont ete reellement passees au classifier.
+    # Distinct de n_samples (= taille du CSV) : exclut les `unknown` et les
+    # images manquantes. Sans ce champ, le report affiche "100 % sur 2
+    # echantillons" alors qu'un seul a ete classe.
+    n_classified = len(truths)
     if not truths:
         return {
             "n_samples": n_samples,
+            "n_classified": 0,
             "top1_accuracy": 0.0,
             "top5_accuracy": 0.0,
             "unknown_rate": unknown_rate,
@@ -180,6 +186,7 @@ def _eval_terrain(classifier: Any, terrain_dir: Path) -> dict[str, Any]:
     top5_acc = top_k_accuracy(top5_preds, truths, k=5)
     return {
         "n_samples": n_samples,
+        "n_classified": n_classified,
         "top1_accuracy": top1_acc,
         "top5_accuracy": top5_acc,
         "unknown_rate": unknown_rate,

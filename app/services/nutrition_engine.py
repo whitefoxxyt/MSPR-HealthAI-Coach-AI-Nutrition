@@ -52,6 +52,11 @@ _MEAL_QUOTAS: dict[MealType, float] = {
     MealType.snack: 0.10,
 }
 
+# Fallback quand `meal_type` est absent : on repartit sur 4 prises (TDEE/4).
+# Pas un alias de _MEAL_QUOTAS[breakfast] : si quelqu'un retouchait breakfast,
+# le fallback ne devrait pas suivre.
+_FALLBACK_MEAL_QUOTA = 1.0 / 4
+
 
 @dataclass(frozen=True)
 class MacroTargets:
@@ -132,7 +137,7 @@ def compute_meal_targets(
     health_goal: HealthGoal,
 ) -> MealTargets:
     # Fallback : meal_type absent -> repartition uniforme sur 4 prises.
-    quota = _MEAL_QUOTAS[meal_type] if meal_type is not None else 0.25
+    quota = _MEAL_QUOTAS[meal_type] if meal_type is not None else _FALLBACK_MEAL_QUOTA
     daily = compute_macro_targets(compute_tdee(profile), health_goal)
     return MealTargets(
         calories=daily.calories * quota,

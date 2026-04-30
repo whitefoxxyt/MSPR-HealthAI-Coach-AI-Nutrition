@@ -31,6 +31,7 @@ def test_eval_terrain_returns_zeros_dict_when_csv_missing(tmp_path: Path) -> Non
 
     assert payload == {
         "n_samples": 0,
+        "n_classified": 0,
         "top1_accuracy": 0.0,
         "top5_accuracy": 0.0,
         "unknown_rate": 0.0,
@@ -47,6 +48,7 @@ def test_eval_terrain_returns_zeros_dict_when_csv_has_header_only(
 
     assert payload == {
         "n_samples": 0,
+        "n_classified": 0,
         "top1_accuracy": 0.0,
         "top5_accuracy": 0.0,
         "unknown_rate": 0.0,
@@ -74,6 +76,7 @@ def test_eval_terrain_top1_and_top5_hit_on_normal_sample(tmp_path: Path) -> None
 
     assert payload == {
         "n_samples": 1,
+        "n_classified": 1,
         "top1_accuracy": 1.0,
         "top5_accuracy": 1.0,
         "unknown_rate": 0.0,
@@ -100,6 +103,7 @@ def test_eval_terrain_top1_miss_top5_hit(tmp_path: Path) -> None:
     payload = _eval_terrain(classifier, tmp_path)
 
     assert payload["n_samples"] == 1
+    assert payload["n_classified"] == 1
     assert payload["top1_accuracy"] == 0.0
     assert payload["top5_accuracy"] == 1.0
     assert payload["unknown_rate"] == 0.0
@@ -137,6 +141,7 @@ def test_eval_terrain_unknown_label_only_contributes_to_unknown_rate(
 
     assert payload == {
         "n_samples": 2,
+        "n_classified": 1,
         "top1_accuracy": 1.0,
         "top5_accuracy": 1.0,
         "unknown_rate": 0.5,
@@ -164,8 +169,10 @@ def test_eval_terrain_skips_missing_image_files(tmp_path: Path) -> None:
 
     payload = _eval_terrain(classifier, tmp_path)
 
-    # n_samples reflete le CSV (2), mais seul img_001 a ete classe.
+    # n_samples reflete le CSV (2), n_classified l'execution effective (1).
+    # La distinction evite que le report annonce "1.0 sur 2 echantillons".
     assert payload["n_samples"] == 2
+    assert payload["n_classified"] == 1
     assert payload["top1_accuracy"] == 1.0
     assert payload["top5_accuracy"] == 1.0
     assert payload["unknown_rate"] == 0.0
@@ -192,6 +199,7 @@ def test_eval_terrain_only_unknown_samples_yields_zero_accuracy(tmp_path: Path) 
 
     assert payload == {
         "n_samples": 1,
+        "n_classified": 0,
         "top1_accuracy": 0.0,
         "top5_accuracy": 0.0,
         "unknown_rate": 1.0,
