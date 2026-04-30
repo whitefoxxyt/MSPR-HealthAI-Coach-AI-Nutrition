@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.limiter import limiter
 from app.models.schemas import MealPlanRequest, MealPlanResponse, PaginatedPlansResponse
 from app.services import jwt_decoder, meal_plan_history, meal_plan_orchestrator
+from app.services.decrim_retry_orchestrator import InfeasibleConstraintsError
 
 # Note : pas de `from __future__ import annotations` ici. Slowapi enveloppe la
 # fonction et FastAPI doit pouvoir resoudre les types Pydantic au moment de
@@ -117,7 +119,12 @@ _PLAN_RESPONSE_EXAMPLE = {
             "description": "Payload invalide (regime inconnu, duree hors [1, 30], etc)."
         },
         429: {"description": "Rate limit depasse (10/heure ou 3/minute)."},
-        503: {"description": "Ollama injoignable et fallback statique indisponible."},
+        503: {
+            "description": (
+                "Contraintes infaisables (allergies / regime impossibles a satisfaire) "
+                "ou Ollama injoignable et fallback statique indisponible."
+            )
+        },
     },
 )
 @limiter.limit("10/hour;3/minute")
@@ -128,7 +135,24 @@ async def generate_meal_plan(
     db: Session = Depends(get_db),
 ) -> MealPlanResponse:
     user_id, token = _auth(authorization)
-    return await meal_plan_orchestrator.generate(user_id, payload, token, db)
+    try:
+        return await meal_plan_orchestrator.generate(user_id, payload, token, db)
+    except InfeasibleConstraintsError:
+        # DeCRIM-light a epuise les retries et le plan statique de fallback
+        # viole encore les allergies / regime : on signale au client que la
+        # combinaison demandee est infaisable plutot que de servir un plan
+        # potentiellement dangereux. Body JSON plat : detail + infeasible cote
+        # racine, contrat explicite pour le client.
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": (
+                    "Contraintes infaisables, ajustez vos contraintes "
+                    "(allergies / regime)."
+                ),
+                "infeasible": True,
+            },
+        )
 
 
 _PLANS_HISTORY_DESCRIPTION = """

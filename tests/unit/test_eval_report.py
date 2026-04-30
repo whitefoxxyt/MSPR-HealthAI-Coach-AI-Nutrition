@@ -42,17 +42,42 @@ def test_render_metrics_md_includes_required_sections(tmp_path: Path) -> None:
             },
         },
         "llm": {
-            "json_validity_rate": 0.94,
-            "fallback_rate": 0.04,
-            "latency": {"p50_ms": 800.0, "p95_ms": 1500.0, "max_ms": 3000.0},
-            "constraint_satisfaction_rate": 0.87,
-            "hitl": {
-                "n_ratings": 20,
-                "mean_nutrition": 4.1,
-                "mean_originalite": 3.2,
-                "mean_coherence": 4.0,
+            "naive": {
+                "n_generations": 30,
+                "json_validity_rate": 0.94,
+                "fallback_rate": 0.04,
+                "latency_p50_ms": 800.0,
+                "latency_p95_ms": 1500.0,
+                "latency_max_ms": 3000.0,
+                "constraint_satisfaction": 0.87,
+                "by_constraint": {
+                    "allergies": 0.5,
+                    "budget": 0.6,
+                    "diet": 0.4,
+                },
+                "hitl": {
+                    "n_ratings": 20,
+                    "mean_nutrition": 4.1,
+                    "mean_originalite": 3.2,
+                    "mean_coherence": 4.0,
+                },
+                "latency_distribution_png": "docs/llm_latency.png",
             },
-            "latency_distribution_png": "docs/llm_latency.png",
+            "pipeline": {
+                "n_generations": 30,
+                "constraint_satisfaction": 0.85,
+                "partial_compliance": 0.10,
+                "static_fallback": 0.03,
+                "abandoned_503": 0.02,
+                "by_constraint": {
+                    "allergies": 1.0,
+                    "budget": 0.85,
+                    "diet": 1.0,
+                },
+                "latency_p50_ms": 1200.0,
+                "latency_p95_ms": 2500.0,
+                "retry_count_distribution": {"0": 25, "1": 3, "2": 2},
+            },
         },
     }
     out = tmp_path / "metrics.md"
@@ -71,7 +96,11 @@ def test_render_metrics_md_includes_required_sections(tmp_path: Path) -> None:
     assert "## Discussion" in content
     # Chiffres bruts
     assert "0.71" in content or "71" in content  # accuracy
-    assert "1500" in content or "1.5" in content  # p95
+    assert "1500" in content or "1.5" in content  # p95 naive
+    # Slice 7 : niveau pipeline + comparaison naive vs pipeline
+    assert "naive" in content.lower()
+    assert "pipeline" in content.lower()
+    assert "Comparaison" in content
     # Embed des PNGs
     assert "docs/confusion_matrix_food101.png" in content
     assert "docs/llm_latency.png" in content

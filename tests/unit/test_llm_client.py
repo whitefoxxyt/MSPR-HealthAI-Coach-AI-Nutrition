@@ -14,6 +14,7 @@ from app.models.schemas import (
     FallbackMealPlan,
     PlanInputs,
 )
+from app.services.decrim_retry_orchestrator import ComplianceStatus
 from app.services.llm_client import (
     compute_inputs_hash,
     generate_plan,
@@ -106,12 +107,14 @@ async def test_generate_plan_success_first_try(
         200, json=_ollama_response(_valid_plan_dict())
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, status, warnings = await generate_plan(inputs, db_session)
 
     assert isinstance(plan, FallbackMealPlan)
     assert plan.fallback is False
     assert _meal_calories(plan) == 1800
     assert plan.days[0].meals[0].name == "Salade poulet"
+    assert status is ComplianceStatus.full
+    assert warnings == []
 
 
 @pytest.mark.asyncio
@@ -123,7 +126,7 @@ async def test_generate_plan_persists_with_inputs_hash(
         200, json=_ollama_response(_valid_plan_dict())
     )
 
-    await generate_plan(inputs, db_session)
+    _plan, _status, _warnings = await generate_plan(inputs, db_session)
 
     row = db_session.execute(
         text("SELECT user_id, inputs_hash, plan FROM meal_plans WHERE user_id = :uid"),
@@ -144,7 +147,7 @@ async def test_generate_plan_calls_ollama_with_json_format(
         200, json=_ollama_response(_valid_plan_dict())
     )
 
-    await generate_plan(inputs, db_session)
+    _plan, _status, _warnings = await generate_plan(inputs, db_session)
 
     assert route.called
     body = json.loads(route.calls.last.request.content)
@@ -169,10 +172,11 @@ async def test_generate_plan_retries_after_first_failure(
     ]
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(side_effect=responses)
 
-    plan = await generate_plan(inputs, db_session)
+    plan, status, _ = await generate_plan(inputs, db_session)
 
     assert plan.fallback is False
     assert _meal_calories(plan) == 1800
+    assert status is ComplianceStatus.full
 
 
 @pytest.mark.asyncio
@@ -186,7 +190,7 @@ async def test_generate_plan_retries_on_invalid_json(
     ]
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(side_effect=responses)
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
     assert plan.fallback is False
     assert plan.days[0].day == 1
@@ -231,12 +235,16 @@ async def test_generate_plan_falls_back_after_max_attempts(
             ],
         }
 
-    plan = await generate_plan(inputs, db_session, fallback_loader=loader)
+    plan, status, warnings = await generate_plan(
+        inputs, db_session, fallback_loader=loader
+    )
 
     assert plan.fallback is True
     assert _meal_calories(plan) == 600
     assert plan.days[0].meals[0].name == "Plan de secours"
     assert fallback_calls == [("weight_loss", "")]
+    assert status is ComplianceStatus.static_fallback
+    assert warnings  # warning explicitant Ollama injoignable
 
 
 @pytest.mark.asyncio
@@ -248,7 +256,7 @@ async def test_generate_plan_makes_exactly_three_attempts_before_fallback(
         500, json={"error": "boom"}
     )
 
-    plan = await generate_plan(
+    plan, _, _ = await generate_plan(
         inputs, db_session, fallback_loader=lambda *_: {"fallback": True, "days": []}
     )
 
@@ -265,7 +273,7 @@ async def test_generate_plan_fallback_without_loader_returns_empty_plan(
         500, json={"error": "boom"}
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
     assert plan.fallback is True
     assert plan.days == []
@@ -298,7 +306,7 @@ async def test_generate_plan_returns_cached_without_calling_ollama(
         200, json=_ollama_response(_valid_plan_dict())
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
     assert _meal_calories(plan) == 9999
     assert route.call_count == 0
@@ -329,7 +337,7 @@ async def test_generate_plan_ignores_cache_older_than_seven_days(
         200, json=_ollama_response(fresh)
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
     assert _meal_calories(plan) == 1234
 
@@ -359,7 +367,7 @@ async def test_generate_plan_bypass_cache_calls_ollama_even_with_hit(
         200, json=_ollama_response(fresh)
     )
 
-    plan = await generate_plan(inputs, db_session, bypass_cache=True)
+    plan, _, _ = await generate_plan(inputs, db_session, bypass_cache=True)
 
     assert _meal_calories(plan) == 4242
     assert route.call_count == 1
@@ -387,17 +395,19 @@ async def test_generate_plan_rejects_plan_with_allergic_ingredient(
     bad = _valid_plan_dict()
     # Le plan contient un ingredient interdit -> validation metier doit rejeter.
     bad["days"][0]["meals"][0]["ingredients"] = ["sauce aux arachides", "riz"]
-    good = _valid_plan_dict()
+    good_meal = _valid_plan_dict()["days"][0]["meals"][0]
+    # 1er appel : plan complet allergene. 2eme : retry partiel sur le repas
+    # violant uniquement -> reponse JSON Meal (pas le plan entier).
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(
         side_effect=[
             httpx.Response(200, json=_ollama_response(bad)),
-            httpx.Response(200, json=_ollama_response(good)),
+            httpx.Response(200, json=_ollama_response(good_meal)),
         ]
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
-    # Le second essai (sans allergene) est accepte.
+    # Le retry partiel (Meal seul) est accepte.
     assert plan.fallback is False
     assert all(
         "arachide" not in ing.lower()
@@ -426,7 +436,7 @@ async def test_generate_plan_does_not_false_positive_lait_in_laitue(
         200, json=_ollama_response(safe)
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
     assert plan.fallback is False
     assert route.call_count == 1  # accepte du premier coup, aucun retry
@@ -446,15 +456,15 @@ async def test_generate_plan_rejects_allergen_with_accents(
     )
     bad = _valid_plan_dict()
     bad["days"][0]["meals"][0]["ingredients"] = ["Lait écrémé", "céréales"]
-    good = _valid_plan_dict()
+    good_meal = _valid_plan_dict()["days"][0]["meals"][0]
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(
         side_effect=[
             httpx.Response(200, json=_ollama_response(bad)),
-            httpx.Response(200, json=_ollama_response(good)),
+            httpx.Response(200, json=_ollama_response(good_meal)),
         ]
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
     assert plan.fallback is False
     assert all(
@@ -479,7 +489,7 @@ async def test_generate_plan_rejects_invalid_pydantic_structure(
         ]
     )
 
-    plan = await generate_plan(inputs, db_session)
+    plan, _, _ = await generate_plan(inputs, db_session)
 
     assert plan.fallback is False
 
@@ -508,9 +518,11 @@ async def test_generate_plan_semaphore_limits_concurrent_ollama_calls(
         PlanInputs(user_id=50 + i, objective="balance", duration_days=1)
         for i in range(4)
     ]
-    plans = await asyncio.gather(*(generate_plan(i, db_session) for i in inputs_list))
+    results = await asyncio.gather(
+        *(generate_plan(i, db_session) for i in inputs_list)
+    )
 
-    assert all(p.fallback is False for p in plans)
+    assert all(plan.fallback is False for plan, _, _ in results)
     assert max_observed >= 2  # parallelisme effectif
     assert max_observed <= 2  # bornage du semaphore
 

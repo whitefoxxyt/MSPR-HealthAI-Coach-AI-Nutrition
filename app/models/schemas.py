@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -168,6 +168,12 @@ class MealPlanResponse(BaseModel):
     plan_id: int
     fallback: bool
     days: list[MealDay]
+    # DeCRIM-light : sortie de la boucle retry / validation / fallback (slice 7).
+    # full           : plan LLM 100% conforme aux contraintes.
+    # partial_budget : allergies + regime OK, budget legerement depasse.
+    # static_fallback: bascule sur le plan statique (LLM infaisable ou injoignable).
+    compliance_status: Literal["full", "partial_budget", "static_fallback"] = "full"
+    compliance_warnings: list[str] = Field(default_factory=list)
 
 
 class MealPlanHistoryItem(BaseModel):

@@ -639,3 +639,159 @@ def test_missing_diet_type_returns_422(
         headers={"Authorization": f"Bearer {valid_jwt(user_id=903)}"},
     )
     assert response.status_code == 422
+
+
+# Slice 7 PRD #45 : compliance_status + compliance_warnings + 503 infaisable.
+
+
+def test_response_includes_compliance_status_and_warnings_on_full(
+    client: TestClient,
+    valid_jwt: Callable[..., str],
+    mock_ollama: respx.MockRouter,
+) -> None:
+    """Plan LLM 100% conforme : compliance_status='full', warnings vides."""
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_payload(_valid_plan())
+    )
+
+    response = client.post(
+        "/api/v1/generate-meal-plan",
+        json={
+            "health_goal": "balance",
+            "diet_type": "omnivore",
+            "duration_days": 1,
+            "allergies": [],
+            "budget_eur_per_day": 15,
+        },
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=1000)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["compliance_status"] == "full"
+    assert body["compliance_warnings"] == []
+
+
+def test_response_includes_static_fallback_when_ollama_down(
+    client: TestClient,
+    valid_jwt: Callable[..., str],
+    mock_ollama: respx.MockRouter,
+) -> None:
+    """Ollama injoignable apres tous les retries : status=static_fallback + warning."""
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        503, json={"error": "down"}
+    )
+
+    response = client.post(
+        "/api/v1/generate-meal-plan",
+        json={
+            "health_goal": "balance",
+            "diet_type": "omnivore",
+            "duration_days": 7,
+            "allergies": [],
+            "budget_eur_per_day": 15,
+        },
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=1001)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["compliance_status"] == "static_fallback"
+    assert body["compliance_warnings"]
+    assert any("statique" in w.lower() for w in body["compliance_warnings"])
+
+
+def test_infeasible_constraints_returns_503_with_explicit_body(
+    client: TestClient,
+    valid_jwt: Callable[..., str],
+    mock_ollama: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Allergie + plan statique allergene : DeCRIM-light leve, router renvoie 503."""
+    bad_meal = {
+        "name": "Pad thai",
+        "macros": {
+            "calories": 500,
+            "protein_g": 25.0,
+            "carbs_g": 50.0,
+            "fat_g": 15.0,
+        },
+        "ingredients": ["sauce aux arachides", "nouilles"],
+        "est_budget_eur": 5.0,
+        "prep_time_min": 15,
+    }
+    bad_plan = {
+        "fallback": False,
+        "days": [{"day": 1, "meals": [bad_meal]}],
+    }
+    bad_meal_resp = {"response": json.dumps(bad_meal), "done": True}
+    # Sequence DeCRIM-light : initial allergene + 2 retries partiels allergenes
+    # + retry plan complet (garde-fou) allergene -> fallback statique allergene -> 503.
+    mock_ollama.post(re.compile(r".*/api/generate$")).mock(
+        side_effect=[
+            httpx.Response(200, json=_ollama_payload(bad_plan)),
+            httpx.Response(200, json=bad_meal_resp),
+            httpx.Response(200, json=bad_meal_resp),
+            httpx.Response(200, json=_ollama_payload(bad_plan)),
+        ]
+    )
+    # On force le plan statique a etre allergene aussi : la combinaison est
+    # vraiment infaisable.
+    monkeypatch.setattr(
+        "app.services.decrim_retry_orchestrator.load_fallback_plan",
+        lambda _goal, _diet: bad_plan,
+    )
+
+    response = client.post(
+        "/api/v1/generate-meal-plan",
+        json={
+            "health_goal": "balance",
+            "diet_type": "omnivore",
+            "duration_days": 1,
+            "allergies": ["arachides"],
+        },
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=1002)}"},
+    )
+
+    assert response.status_code == 503, response.text
+    body = response.json()
+    assert body["infeasible"] is True
+    assert "infaisables" in body["detail"].lower()
+    assert "allergies" in body["detail"].lower()
+
+
+def test_compliance_persisted_to_meal_plans_table(
+    client: TestClient,
+    valid_jwt: Callable[..., str],
+    mock_ollama: respx.MockRouter,
+    db_session: Session,
+) -> None:
+    """compliance_status / compliance_warnings sont ecrits dans meal_plans."""
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_payload(_valid_plan())
+    )
+
+    response = client.post(
+        "/api/v1/generate-meal-plan",
+        json={
+            "health_goal": "balance",
+            "diet_type": "omnivore",
+            "duration_days": 1,
+            "allergies": [],
+            "budget_eur_per_day": 15,
+        },
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=1003)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    row = db_session.execute(
+        text(
+            "SELECT compliance_status, compliance_warnings "
+            "FROM meal_plans WHERE user_id = 1003"
+        )
+    ).fetchone()
+    assert row is not None
+    assert row.compliance_status == "full"
+    # Liste vide en BDD : NULL ou tableau vide selon la version, on accepte
+    # les deux (le contrat client est "compliance_warnings: list" cote API).
+    assert row.compliance_warnings in (None, [])

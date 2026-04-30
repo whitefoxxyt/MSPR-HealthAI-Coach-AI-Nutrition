@@ -20,10 +20,10 @@ from app.models.schemas import (
     ImbalanceTag,
     PlanInputs,
 )
-from app.services.constraint_validator import (
-    ConstraintSpec,
-    ViolationType,
-    validate as validate_constraints,
+from app.services.decrim_retry_orchestrator import (
+    ComplianceStatus,
+    InfeasibleConstraintsError,
+    generate_with_retry,
 )
 
 T = TypeVar("T")
@@ -35,20 +35,9 @@ _LOGGER = logging.getLogger(__name__)
 _OLLAMA_SEMAPHORE = asyncio.Semaphore(2)
 
 _OLLAMA_TIMEOUT_S = 30.0
-_MAX_ATTEMPTS = 3  # 1 essai initial + 2 retries
+_MAX_ATTEMPTS = 3  # 1 essai initial + 2 retries (flakiness Ollama)
 _RETRY_BACKOFF_S = 0.5  # backoff exponentiel : 0.5s, 1.0s entre retries
 _OLLAMA_MODEL = "gemma3:4b"
-
-_PLAN_PROMPT_TEMPLATE = (
-    "Tu es un nutritionniste. Genere un plan repas JSON pour {duration_days} jours.\n"
-    "Objectif : {objective}.\n"
-    "Regime : {diet_type}.\n"
-    "Allergies a eviter (aucun ingredient ne doit en contenir) : {allergies}.\n"
-    "Cible calorique journaliere : {calories_target}.\n"
-    "Pour chaque repas : name, macros (calories, protein_g, carbs_g, fat_g),\n"
-    "ingredients (liste), est_budget_eur, prep_time_min. Mets fallback=false.\n"
-    "Reponds uniquement par un JSON conforme au schema fourni."
-)
 
 _RECO_PROMPT_TEMPLATE = (
     "Tu es un coach nutritionnel. L'utilisateur a les desequilibres suivants "
@@ -98,8 +87,22 @@ async def generate_plan(
     db: Session,
     bypass_cache: bool = False,
     fallback_loader: Callable[[str, str], dict[str, Any] | None] | None = None,
-) -> FallbackMealPlan:
-    """Genere un plan repas via Ollama, avec cache, retry, semaphore, validation."""
+) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]]:
+    """Genere un plan repas en deleguant la boucle DeCRIM-light a l'orchestrator.
+
+    Slice 7 PRD #45 : llm_client wrappe generate_with_retry pour gerer le cache,
+    la flakiness Ollama (httpx erreurs / JSON invalide / Pydantic), la persistance
+    et le fallback applicatif. La boucle de retry sur contraintes (allergie /
+    regime / budget) vit dans decrim_retry_orchestrator.
+
+    Retours :
+      - (plan, status, warnings) tuple
+      - InfeasibleConstraintsError remontee tel quel : le router traduit en 503
+
+    Comportement flakiness : 3 tentatives orchestrateur. Chaque tentative qui
+    leve httpx/JSON/Pydantic compte pour 1. Apres _MAX_ATTEMPTS echecs ou si la
+    1ere tentative reussit avec status non-full, on s'arrete.
+    """
     inputs_hash = compute_inputs_hash(inputs)
 
     if not bypass_cache:
@@ -107,18 +110,35 @@ async def generate_plan(
         if cached is not None:
             return cached
 
-    try:
-        plan = await _attempt_with_retry(
-            prompt=_build_plan_prompt(inputs),
-            json_schema=FallbackMealPlan.model_json_schema(),
-            parse=lambda raw: _validate_plan(raw, inputs),
-            log_id=inputs_hash,
-        )
-    except _OllamaCallFailed:
-        return _build_fallback_plan(inputs, inputs_hash, db, fallback_loader)
+    last_error: Exception | None = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        start = time.monotonic()
+        try:
+            async with _OLLAMA_SEMAPHORE:
+                plan, status = await generate_with_retry(inputs)
+        except InfeasibleConstraintsError:
+            raise
+        except (httpx.HTTPError, json.JSONDecodeError, ValidationError) as exc:
+            last_error = exc
+            log_status = "retry" if attempt < _MAX_ATTEMPTS else "fallback"
+            _log_call(inputs_hash, start, attempt, log_status, error=str(exc))
+            if attempt < _MAX_ATTEMPTS:
+                # Backoff exponentiel : 0.5s, 1.0s. Laisse Ollama respirer.
+                await asyncio.sleep(_RETRY_BACKOFF_S * (2 ** (attempt - 1)))
+            continue
 
-    _persist_plan(db, plan, inputs_hash, inputs)
-    return plan
+        warnings = _build_compliance_warnings(plan, status, inputs)
+        _persist_plan(db, plan, inputs_hash, inputs, status.value, warnings)
+        _log_call(inputs_hash, start, attempt, "success")
+        return plan, status, warnings
+
+    _LOGGER.warning(
+        "llm_client : echec apres %d tentatives (log_id=%s) : %s",
+        _MAX_ATTEMPTS,
+        inputs_hash,
+        last_error,
+    )
+    return _build_fallback_plan(inputs, inputs_hash, db, fallback_loader)
 
 
 # Generation de recommandation textuelle
@@ -197,7 +217,11 @@ async def _attempt_with_retry(
     parse: Callable[[str], T],
     log_id: str,
 ) -> T:
-    """Boucle retry + semaphore commune a generate_plan / generate_recommendation."""
+    """Boucle retry + semaphore pour generate_recommendation.
+
+    generate_plan delegue desormais a decrim_retry_orchestrator et n'utilise
+    plus cette helper. Conservee pour les recommandations textuelles libres.
+    """
     last_error: Exception | None = None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         start = time.monotonic()
@@ -249,49 +273,50 @@ async def _call_ollama_generate(prompt: str, json_schema: dict[str, Any] | None)
     return data.get("response", "")
 
 
-def _validate_plan(raw_response: str, inputs: PlanInputs) -> FallbackMealPlan:
-    """Parse le JSON, valide via Pydantic, applique les regles metier."""
-    try:
-        parsed = json.loads(raw_response)
-    except json.JSONDecodeError as exc:
-        raise _PlanValidationError(f"JSON invalide : {exc}") from exc
-    # Le LLM oublie parfois 'fallback' qui est requis par le schema. On le
-    # force a False sur le chemin success ; _build_fallback_plan le met a True.
-    if isinstance(parsed, dict):
-        parsed.setdefault("fallback", False)
-    plan = FallbackMealPlan.model_validate(parsed)
-    if inputs.allergies:
-        spec = ConstraintSpec(allergies=inputs.allergies)
-        for v in validate_constraints(plan, spec):
-            if v.type is ViolationType.allergy:
-                raise _PlanValidationError(v.message)
-    return plan
+def _build_compliance_warnings(
+    plan: FallbackMealPlan,
+    status: ComplianceStatus,
+    inputs: PlanInputs,
+) -> list[str]:
+    """Genere les warnings explicites associes au compliance_status.
 
-
-def _build_plan_prompt(inputs: PlanInputs) -> str:
-    return _PLAN_PROMPT_TEMPLATE.format(
-        duration_days=inputs.duration_days,
-        objective=inputs.objective,
-        diet_type=inputs.diet_type or "aucun",
-        allergies=", ".join(sorted(inputs.allergies)) if inputs.allergies else "aucune",
-        calories_target=inputs.calories_target
-        if inputs.calories_target
-        else "non specifiee",
-    )
+    full           : aucune contrainte relachee.
+    partial_budget : enumere les jours qui depassent le budget journalier.
+    static_fallback: explique que le plan statique sert de repli.
+    """
+    if status is ComplianceStatus.full:
+        return []
+    if status is ComplianceStatus.static_fallback:
+        return ["Contraintes infaisables par le LLM, plan statique de repli."]
+    if status is ComplianceStatus.partial_budget:
+        budget = float(inputs.budget_per_day) if inputs.budget_per_day else None
+        if budget is None:
+            return ["Plan partiellement conforme (budget)."]
+        warnings: list[str] = []
+        for day in plan.days:
+            day_total = sum(meal.est_budget_eur for meal in day.meals)
+            if day_total > budget:
+                overflow = day_total - budget
+                warnings.append(
+                    f"Budget journalier depasse de {overflow:.2f} EUR le jour {day.day}."
+                )
+        return warnings or ["Plan partiellement conforme (budget)."]
+    return []
 
 
 def _lookup_cached_plan(
     db: Session, user_id: int, inputs_hash: str
-) -> FallbackMealPlan | None:
+) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]] | None:
     """Recupere le dernier plan en cache (< 7 jours) pour ce inputs_hash.
 
+    Renvoie aussi compliance_status et compliance_warnings tels que persistes.
     Filtre redondant sur user_id : le hash inclut deja user_id, mais l'expliciter
     documente la requete et protege en defense-en-profondeur si la canonicalisation
     venait a changer.
     """
     row = db.execute(
         text(
-            "SELECT plan FROM meal_plans "
+            "SELECT plan, compliance_status, compliance_warnings FROM meal_plans "
             "WHERE user_id = :uid "
             "AND inputs_hash = :h "
             "AND generated_at > NOW() - INTERVAL '7 days' "
@@ -302,21 +327,31 @@ def _lookup_cached_plan(
     ).fetchone()
     if row is None:
         return None
-    return FallbackMealPlan.model_validate(row.plan)
+    plan = FallbackMealPlan.model_validate(row.plan)
+    status = ComplianceStatus(row.compliance_status or "full")
+    warnings = list(row.compliance_warnings or [])
+    return plan, status, warnings
 
 
 def _persist_plan(
-    db: Session, plan: FallbackMealPlan, inputs_hash: str, inputs: PlanInputs
+    db: Session,
+    plan: FallbackMealPlan,
+    inputs_hash: str,
+    inputs: PlanInputs,
+    compliance_status: str,
+    compliance_warnings: list[str],
 ) -> None:
-    """Insere une ligne meal_plans avec le plan complet et son inputs_hash.
+    """Insere une ligne meal_plans avec le plan complet, son inputs_hash et le compliance.
 
     Flush sans commit : la decision de commit revient au caller (handler FastAPI),
     pour ne pas finaliser une transaction qui contient peut-etre d'autres ecritures.
     """
     db.execute(
         text(
-            "INSERT INTO meal_plans (user_id, plan, objective, constraints, inputs_hash) "
-            "VALUES (:uid, CAST(:plan AS JSONB), :obj, CAST(:cons AS JSONB), :h)"
+            "INSERT INTO meal_plans (user_id, plan, objective, constraints, "
+            "inputs_hash, compliance_status, compliance_warnings) "
+            "VALUES (:uid, CAST(:plan AS JSONB), :obj, CAST(:cons AS JSONB), :h, "
+            ":status, :warnings)"
         ),
         {
             "uid": inputs.user_id,
@@ -324,6 +359,8 @@ def _persist_plan(
             "obj": inputs.objective,
             "cons": json.dumps(canonicalize_inputs(inputs)),
             "h": inputs_hash,
+            "status": compliance_status,
+            "warnings": list(compliance_warnings or []),
         },
     )
     db.flush()
@@ -334,8 +371,12 @@ def _build_fallback_plan(
     inputs_hash: str,
     db: Session,
     fallback_loader: Callable[[str, str], dict[str, Any] | None] | None,
-) -> FallbackMealPlan:
-    """Construit un plan en mode degrade : matrice statique ou squelette vide."""
+) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]]:
+    """Construit un plan en mode degrade : matrice statique ou squelette vide.
+
+    Cas Ollama injoignable apres tous les retries flakiness. Le plan retourne
+    porte status=static_fallback et un warning explicitant la cause.
+    """
     raw: dict[str, Any] | None = None
     if fallback_loader is not None:
         raw = fallback_loader(inputs.objective, inputs.diet_type or "")
@@ -345,8 +386,16 @@ def _build_fallback_plan(
     raw["fallback"] = True
 
     plan = FallbackMealPlan.model_validate(raw)
-    _persist_plan(db, plan, inputs_hash, inputs)
-    return plan
+    warnings = ["Ollama injoignable, plan statique de repli."]
+    _persist_plan(
+        db,
+        plan,
+        inputs_hash,
+        inputs,
+        ComplianceStatus.static_fallback.value,
+        warnings,
+    )
+    return plan, ComplianceStatus.static_fallback, warnings
 
 
 # Logging structure
