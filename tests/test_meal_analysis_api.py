@@ -349,3 +349,243 @@ def test_analyze_meal_uses_balance_when_health_goal_missing(
     # Le LLM a bien ete appele avec health_goal=balance.
     assert captured_prompts, "Aucun appel LLM enregistre"
     assert all("balance" in p for p in captured_prompts)
+
+
+# Slice 8 (#54) : serving_sizes par aliment + meal_type optionnel + suggestion
+# LLM unique sur la portion medium.
+
+
+def _patch_classifier(
+    monkeypatch: pytest.MonkeyPatch, predictions: list[tuple[str, float]]
+) -> None:
+    """Remplace classify_image par un fake retournant predictions tel quel.
+
+    Permet de bypasser le seuil de confiance et de tester avec plusieurs aliments.
+    """
+    from app.services import food_classifier, meal_analysis_orchestrator
+
+    def fake(image_bytes: bytes, **_: Any) -> list[tuple[str, float]]:
+        return predictions
+
+    monkeypatch.setattr(food_classifier, "classify_image", fake)
+    monkeypatch.setattr(meal_analysis_orchestrator, "classify_image", fake)
+
+
+def test_analyze_meal_returns_serving_sizes_per_detected_food(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_ollama: respx.MockRouter,
+    valid_jwt: Callable[..., str],
+) -> None:
+    """Reponse contient serving_sizes : 1 liste de 3 portions par aliment detecte."""
+    user_id = 60
+    _seed_pizza(db_session)
+    _seed_full_profile(db_session, user_id)
+    _patch_classifier(monkeypatch, [("pizza", 0.85), ("steak", 0.55)])
+
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json={"response": "Conseil unique.", "done": True}
+    )
+
+    response = client.post(
+        "/api/v1/analyze-meal",
+        files={"photo": ("pizza.png", _png_bytes(), "image/png")},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=user_id)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    # Deux aliments detectes : pizza et steak.
+    serving_sizes = body["serving_sizes"]
+    assert len(serving_sizes) == 2
+    for portions in serving_sizes:
+        assert len(portions) == 3
+        assert {p["label"] for p in portions} == {"small", "medium", "large"}
+        for portion in portions:
+            assert {"label", "grams", "macros"}.issubset(portion)
+            assert isinstance(portion["macros"], dict)
+            assert portion["grams"] > 0
+
+
+def test_analyze_meal_warns_when_meal_type_missing(
+    client: TestClient,
+    db_session: Session,
+    mock_classifier: Callable[..., list[dict[str, Any]]],
+    mock_ollama: respx.MockRouter,
+    valid_jwt: Callable[..., str],
+) -> None:
+    """Sans meal_type, la reponse contient un warning explicit (fallback TDEE/4)."""
+    user_id = 61
+    _seed_pizza(db_session)
+    _seed_full_profile(db_session, user_id)
+
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json={"response": "ok.", "done": True}
+    )
+
+    response = client.post(
+        "/api/v1/analyze-meal",
+        files={"photo": ("pizza.png", _png_bytes(), "image/png")},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=user_id)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "meal_type non specifie, fallback TDEE/4" in body["warnings"]
+
+
+def test_analyze_meal_no_warning_when_meal_type_specified(
+    client: TestClient,
+    db_session: Session,
+    mock_classifier: Callable[..., list[dict[str, Any]]],
+    mock_ollama: respx.MockRouter,
+    valid_jwt: Callable[..., str],
+) -> None:
+    """meal_type fourni : pas de warning fallback dans la reponse."""
+    user_id = 62
+    _seed_pizza(db_session)
+    _seed_full_profile(db_session, user_id)
+
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json={"response": "ok.", "done": True}
+    )
+
+    response = client.post(
+        "/api/v1/analyze-meal",
+        files={"photo": ("pizza.png", _png_bytes(), "image/png")},
+        data={"meal_type": "lunch"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=user_id)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert all(
+        "meal_type non specifie" not in w for w in body.get("warnings", [])
+    )
+
+
+def test_analyze_meal_persists_serving_sizes_and_meal_type(
+    client: TestClient,
+    db_session: Session,
+    mock_classifier: Callable[..., list[dict[str, Any]]],
+    mock_ollama: respx.MockRouter,
+    valid_jwt: Callable[..., str],
+) -> None:
+    """serving_sizes (JSONB) et meal_type (TEXT) sont persistes en BDD."""
+    user_id = 63
+    _seed_pizza(db_session)
+    _seed_full_profile(db_session, user_id)
+
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json={"response": "ok.", "done": True}
+    )
+
+    response = client.post(
+        "/api/v1/analyze-meal",
+        files={"photo": ("pizza.png", _png_bytes(), "image/png")},
+        data={"meal_type": "dinner"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=user_id)}"},
+    )
+    assert response.status_code == 200, response.text
+
+    row = db_session.execute(
+        text(
+            "SELECT serving_sizes, meal_type FROM meal_analyses "
+            "WHERE user_id = :uid"
+        ),
+        {"uid": user_id},
+    ).fetchone()
+    assert row is not None
+    assert row.meal_type == "dinner"
+
+    persisted = row.serving_sizes
+    assert isinstance(persisted, list)
+    assert len(persisted) >= 1
+    portions = persisted[0]
+    assert len(portions) == 3
+    assert {p["label"] for p in portions} == {"small", "medium", "large"}
+    for p in portions:
+        assert {"label", "grams", "macros"}.issubset(p)
+
+
+def test_analyze_meal_macros_match_medium_portion_of_top_food(
+    client: TestClient,
+    db_session: Session,
+    mock_classifier: Callable[..., list[dict[str, Any]]],
+    mock_ollama: respx.MockRouter,
+    valid_jwt: Callable[..., str],
+) -> None:
+    """Slice 8 : macros du repas = portion medium de l'aliment le plus probable.
+
+    Pizza est mappee a plats_composes (medium = 350 g). nutrition_entries stocke
+    les macros pour 100 g (convention OFF/USDA), donc le repas medium = lookup * 3.5.
+    """
+    user_id = 64
+    _seed_pizza(db_session)  # 1300 cal / 100 g
+    _seed_full_profile(db_session, user_id)
+
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json={"response": "ok.", "done": True}
+    )
+
+    response = client.post(
+        "/api/v1/analyze-meal",
+        files={"photo": ("pizza.png", _png_bytes(), "image/png")},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=user_id)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    # serving_sizes[0] = pizza (top), trouver la portion medium.
+    pizza_portions = body["serving_sizes"][0]
+    medium = next(p for p in pizza_portions if p["label"] == "medium")
+    assert medium["grams"] == 350  # plats_composes
+    assert medium["macros"]["calories"] == pytest.approx(1300 * 3.5)
+
+    # Les macros agreges du repas correspondent exactement a la portion medium.
+    assert body["macros"]["calories"] == pytest.approx(medium["macros"]["calories"])
+    assert body["macros"]["protein_g"] == pytest.approx(medium["macros"]["protein_g"])
+
+
+def test_analyze_meal_unmapped_food_label_falls_back_to_single_medium_portion(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_ollama: respx.MockRouter,
+    valid_jwt: Callable[..., str],
+) -> None:
+    """Label hors mapping PNNS : portion_sizes renvoie 1 seule portion medium 100 g."""
+    user_id = 65
+    db_session.execute(
+        text(
+            "INSERT INTO nutrition_entries "
+            "(food_name, calories, protein_g, carbs_g, fat_g, fiber_g, source) "
+            "VALUES ('mystery_food', 200, 10, 20, 5, 2, 'TEST')"
+        )
+    )
+    db_session.commit()
+    _seed_full_profile(db_session, user_id)
+    _patch_classifier(monkeypatch, [("mystery_food", 0.9)])
+
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json={"response": "ok.", "done": True}
+    )
+
+    response = client.post(
+        "/api/v1/analyze-meal",
+        files={"photo": ("pizza.png", _png_bytes(), "image/png")},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=user_id)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    portions = body["serving_sizes"][0]
+    assert len(portions) == 1
+    assert portions[0]["label"] == "medium"
+    assert portions[0]["grams"] == 100
+    # Macros = lookup direct (factor 1.0) puisque la portion fallback fait 100 g.
+    assert body["macros"]["calories"] == pytest.approx(200)

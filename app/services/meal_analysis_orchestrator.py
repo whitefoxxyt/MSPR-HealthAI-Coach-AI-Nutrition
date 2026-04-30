@@ -10,13 +10,14 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.data import recommendations_matrix as matrix
+from app.data import portion_sizes, recommendations_matrix as matrix
 from app.db.models import MealAnalysis, NutritionGoal
 from app.models.schemas import (
     HealthGoal,
     ImbalanceStatus,
     ImbalanceTag,
     Nutrient,
+    ServingSizeLabel,
 )
 from app.services import llm_client
 from app.services.food_classifier import classify_image
@@ -70,21 +71,27 @@ async def analyze_meal(
         for label, score in predictions
     ]
 
-    # 3. Macros du repas (aliment le plus probable).
-    top_label = predictions[0][0]
-    top_nutrition = detected_foods[0]["nutrition"] or {}
-    macros: dict[str, float] = {
-        k: top_nutrition[k] for k in _MACRO_KEYS if top_nutrition.get(k) is not None
-    }
+    # 3. Tailles de portion PNNS + macros recalculees pour chaque aliment.
+    serving_sizes_by_food = [
+        _serving_sizes_for(item["label"], item["nutrition"])
+        for item in detected_foods
+    ]
 
-    # 4. Profil + objectif sante.
+    # 4. Macros du repas : portion medium de l'aliment le plus probable.
+    # Slice 8 : la suggestion LLM est generee sur cette portion (la plus probable).
+    top_label = predictions[0][0]
+    macros = _medium_portion_macros(serving_sizes_by_food[0])
+
+    # 5. Profil + objectif sante.
     goal = (
         db.query(NutritionGoal).filter(NutritionGoal.user_id == user_id).one_or_none()
     )
     health_goal = _resolve_health_goal(goal)
     user_profile = build_user_profile(goal)
 
-    # 5. Profil incomplet : pas de tags, pas de LLM, on indique au front qu'il
+    warnings = _build_warnings(meal_type)
+
+    # 6. Profil incomplet : pas de tags, pas de LLM, on indique au front qu'il
     # faut completer la biometrie.
     if isinstance(user_profile, IncompleteProfile):
         analysis = _persist_analysis(
@@ -96,6 +103,7 @@ async def analyze_meal(
             recommendations_hash=None,
             imbalances=[],
             meal_type=meal_type,
+            serving_sizes=serving_sizes_by_food,
         )
         return {
             "analysis_id": analysis.id,
@@ -107,9 +115,11 @@ async def analyze_meal(
             "fallback": False,
             "profile_completion_required": True,
             "missing_fields": list(user_profile.missing_fields),
+            "serving_sizes": serving_sizes_by_food,
+            "warnings": warnings,
         }
 
-    # 6. Detection des desequilibres + textes deterministes.
+    # 7. Detection des desequilibres + textes deterministes.
     tags = detect(
         meal_macros=macros,
         profile=goal,
@@ -118,7 +128,7 @@ async def analyze_meal(
     )
     imbalances_text = [imbalance_to_text(t) for t in tags]
 
-    # 7. Recommandations : cache, sinon LLM unique synthetique.
+    # 8. Recommandations : cache, sinon LLM unique synthetique.
     if not tags:
         recommendations: list[str] = []
         recommendations_hash: str | None = None
@@ -136,7 +146,7 @@ async def analyze_meal(
                 tags, health_goal, db
             )
 
-    # 8. Persistance. Hash NULL en mode fallback (un appel ulterieur retentera le LLM).
+    # 9. Persistance. Hash NULL en mode fallback (un appel ulterieur retentera le LLM).
     analysis = _persist_analysis(
         db=db,
         user_id=user_id,
@@ -146,6 +156,7 @@ async def analyze_meal(
         recommendations_hash=None if fallback_used else recommendations_hash,
         imbalances=tags,
         meal_type=meal_type,
+        serving_sizes=serving_sizes_by_food,
     )
 
     return {
@@ -158,6 +169,8 @@ async def analyze_meal(
         "fallback": fallback_used,
         "profile_completion_required": False,
         "missing_fields": [],
+        "serving_sizes": serving_sizes_by_food,
+        "warnings": warnings,
     }
 
 
@@ -258,6 +271,7 @@ def _persist_analysis(
     recommendations_hash: str | None,
     imbalances: list[ImbalanceTag],
     meal_type: MealType | None,
+    serving_sizes: list[list[dict[str, Any]]],
 ) -> MealAnalysis:
     analysis = MealAnalysis(
         user_id=user_id,
@@ -269,9 +283,57 @@ def _persist_analysis(
         recommendations=recommendations,
         recommendations_hash=recommendations_hash,
         imbalances=[t.model_dump(mode="json") for t in imbalances],
+        serving_sizes=serving_sizes,
         meal_type=meal_type.value if meal_type is not None else None,
     )
     db.add(analysis)
     db.commit()
     db.refresh(analysis)
     return analysis
+
+
+_MEAL_TYPE_FALLBACK_WARNING = "meal_type non specifie, fallback TDEE/4"
+
+
+def _build_warnings(meal_type: MealType | None) -> list[str]:
+    if meal_type is None:
+        return [_MEAL_TYPE_FALLBACK_WARNING]
+    return []
+
+
+def _serving_sizes_for(
+    label: str, nutrition: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Resout les portions PNNS et y joint les macros recalculees au prorata."""
+    portions = portion_sizes.get_serving_sizes(label)
+    return [
+        {
+            "label": p.label.value,
+            "grams": p.grams,
+            "description": p.description,
+            "macros": _scale_macros(nutrition, p.grams),
+        }
+        for p in portions
+    ]
+
+
+def _scale_macros(
+    nutrition: dict[str, Any] | None, grams: int
+) -> dict[str, float]:
+    """nutrition_entries stocke les valeurs pour 100 g (convention OFF/USDA)."""
+    if not nutrition:
+        return {}
+    factor = grams / 100.0
+    return {
+        k: float(nutrition[k]) * factor
+        for k in _MACRO_KEYS
+        if nutrition.get(k) is not None
+    }
+
+
+def _medium_portion_macros(portions: list[dict[str, Any]]) -> dict[str, float]:
+    """Renvoie les macros de la portion medium ; vide si aucun macro lookup."""
+    for p in portions:
+        if p["label"] == ServingSizeLabel.medium.value:
+            return dict(p["macros"])
+    return {}
