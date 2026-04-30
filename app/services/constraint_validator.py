@@ -114,18 +114,20 @@ def _normalize(text_value: str) -> str:
     return stripped.casefold()
 
 
-def _ingredient_contains_term(ingredient: str, term: str) -> bool:
-    """Match a frontiere de mot, evite 'lait' dans 'laitue' ou 'oeuf' dans 'boeuf'."""
-    pattern = re.compile(rf"\b{re.escape(_normalize(term))}\b")
-    return bool(pattern.search(_normalize(ingredient)))
+def _compile_term(term: str) -> re.Pattern[str]:
+    """Pattern a frontiere de mot, evite 'lait' dans 'laitue' ou 'oeuf' dans 'boeuf'."""
+    return re.compile(rf"\b{re.escape(_normalize(term))}\b")
 
 
 def validate(
     plan: FallbackMealPlan, constraints: ConstraintSpec
 ) -> list[ConstraintViolation]:
     """Retourne toutes les violations du plan vis-a-vis des contraintes."""
-    allergens = [a for a in constraints.allergies if a.strip()]
+    allergen_patterns = [
+        (a, _compile_term(a)) for a in constraints.allergies if a.strip()
+    ]
     banned = _DIET_BANNED.get(constraints.diet_type or "", frozenset())
+    banned_patterns = [(t, _compile_term(t)) for t in banned]
     diet_label = constraints.diet_type
     budget_max = constraints.max_daily_budget_eur
 
@@ -133,11 +135,16 @@ def validate(
     for day in plan.days:
         for meal_idx, meal in enumerate(day.meals):
             for ing in meal.ingredients:
+                normalized = _normalize(ing)
                 violations.extend(
-                    _allergen_violations(ing, allergens, day.day, meal_idx)
+                    _allergen_violations(
+                        ing, normalized, allergen_patterns, day.day, meal_idx
+                    )
                 )
                 violations.extend(
-                    _diet_violations(ing, banned, diet_label, day.day, meal_idx)
+                    _diet_violations(
+                        ing, normalized, banned_patterns, diet_label, day.day, meal_idx
+                    )
                 )
         if budget_max is not None:
             violations.extend(_budget_violation(day, budget_max))
@@ -145,7 +152,11 @@ def validate(
 
 
 def _allergen_violations(
-    ingredient: str, allergens: list[str], day_num: int, meal_idx: int
+    ingredient: str,
+    normalized_ingredient: str,
+    allergen_patterns: list[tuple[str, re.Pattern[str]]],
+    day_num: int,
+    meal_idx: int,
 ) -> list[ConstraintViolation]:
     return [
         ConstraintViolation(
@@ -155,14 +166,15 @@ def _allergen_violations(
             ingredient_or_amount=ingredient,
             message=f"Allergene {a!r} present dans {ingredient!r}.",
         )
-        for a in allergens
-        if _ingredient_contains_term(ingredient, a)
+        for a, pattern in allergen_patterns
+        if pattern.search(normalized_ingredient)
     ]
 
 
 def _diet_violations(
     ingredient: str,
-    banned: frozenset[str],
+    normalized_ingredient: str,
+    banned_patterns: list[tuple[str, re.Pattern[str]]],
     diet_type: str | None,
     day_num: int,
     meal_idx: int,
@@ -178,8 +190,8 @@ def _diet_violations(
                 f"{diet_type!r} (terme banni : {term!r})."
             ),
         )
-        for term in banned
-        if _ingredient_contains_term(ingredient, term)
+        for term, pattern in banned_patterns
+        if pattern.search(normalized_ingredient)
     ]
 
 

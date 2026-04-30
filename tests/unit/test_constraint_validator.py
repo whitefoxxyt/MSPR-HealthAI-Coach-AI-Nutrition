@@ -123,7 +123,7 @@ def test_diet_sans_gluten_flags_ble() -> None:
 
     diet_violations = [v for v in violations if v.type is ViolationType.diet]
     # 'pates' et 'ble' sont tous deux bannis -> deux violations sur le meme ingredient.
-    assert len(diet_violations) >= 1
+    assert len(diet_violations) == 2
     assert all(v.day == 1 and v.meal_index == 0 for v in diet_violations)
 
 
