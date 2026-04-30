@@ -17,9 +17,8 @@ from app.config import settings
 from app.models.schemas import (
     FallbackMealPlan,
     HealthGoal,
-    Imbalance,
+    ImbalanceTag,
     PlanInputs,
-    RecommendationContext,
 )
 from app.services.constraint_validator import (
     ConstraintSpec,
@@ -52,9 +51,10 @@ _PLAN_PROMPT_TEMPLATE = (
 )
 
 _RECO_PROMPT_TEMPLATE = (
-    "Tu es un coach nutritionnel. L'utilisateur a un desequilibre {imbalance} "
-    "alors que son objectif est {health_goal}. Donne en une a deux phrases une "
-    "recommandation actionnable, en francais, sans formattage markdown."
+    "Tu es un coach nutritionnel. L'utilisateur a les desequilibres suivants "
+    "sur ce repas :\n{imbalances_block}\nSon objectif est {health_goal}. Donne "
+    "une recommandation synthetique unique en deux a trois phrases, en francais, "
+    "sans formattage markdown, qui couvre l'ensemble des desequilibres."
 )
 
 _RECO_DEFAULT_FALLBACK = (
@@ -125,15 +125,27 @@ async def generate_plan(
 
 
 async def generate_recommendation(
-    ctx: RecommendationContext,
-    db: Session,  # noqa: ARG001 (signature publique imposee par l'issue)
-    fallback: Callable[[Imbalance, HealthGoal], str] | None = None,
+    ctx_list: list[ImbalanceTag],
+    health_goal: HealthGoal,
+    db: Session,  # noqa: ARG001 (reservee pour cache cote orchestrator)
+    fallback: Callable[[list[ImbalanceTag], HealthGoal], str] | None = None,
 ) -> str:
-    """Genere une recommandation textuelle courte via Ollama, avec retry et fallback."""
-    prompt = _RECO_PROMPT_TEMPLATE.format(
-        imbalance=ctx.imbalance.value, health_goal=ctx.health_goal.value
+    """Genere une recommandation synthetique unique pour l'ensemble des imbalances.
+
+    Issue #51 : un seul appel Ollama, prompt couvrant toutes les imbalances et
+    l'objectif sante. Le cache est gere par meal_analysis_orchestrator (cle :
+    hash de top_label + health_goal + imbalances triees).
+    """
+    if not ctx_list:
+        return ""
+
+    sorted_tags = sorted(ctx_list, key=_tag_sort_key)
+    prompt = _build_recommendation_prompt(sorted_tags, health_goal)
+    log_id = (
+        "reco:"
+        + ",".join(f"{t.nutrient.value}/{t.status.value}" for t in sorted_tags)
+        + f":{health_goal.value}"
     )
-    log_id = f"reco:{ctx.imbalance.value}:{ctx.health_goal.value}:{ctx.user_id}"
 
     try:
         return await _attempt_with_retry(
@@ -144,8 +156,28 @@ async def generate_recommendation(
         )
     except _OllamaCallFailed:
         if fallback is not None:
-            return fallback(ctx.imbalance, ctx.health_goal)
+            return fallback(sorted_tags, health_goal)
         return _RECO_DEFAULT_FALLBACK
+
+
+def _tag_sort_key(tag: ImbalanceTag) -> tuple[str, str]:
+    return (tag.nutrient.value, tag.status.value)
+
+
+def _build_recommendation_prompt(
+    tags: list[ImbalanceTag], health_goal: HealthGoal
+) -> str:
+    # Ordre stable -> prompt deterministe -> reponse cache-friendly.
+    lines = [
+        f"- {tag.nutrient.value} ({tag.status.value}, ecart "
+        f"{tag.delta_pct * 100:+.0f}%, cible {tag.target_value:.1f} {tag.unit}, "
+        f"apport {tag.actual_value:.1f} {tag.unit})"
+        for tag in tags
+    ]
+    return _RECO_PROMPT_TEMPLATE.format(
+        imbalances_block="\n".join(lines),
+        health_goal=health_goal.value,
+    )
 
 
 # Internes : Ollama, validation, cache, fallback
