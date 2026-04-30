@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import settings
+from app.data.plan_few_shot_examples import FEW_SHOT_EXAMPLES, FewShotExample
 from app.models.schemas import FallbackMealPlan, Meal, MealDay, PlanInputs
 from app.services.constraint_validator import (
     ConstraintSpec,
@@ -19,8 +20,27 @@ from app.services.fallback_loader import load_fallback_plan
 _OLLAMA_TIMEOUT_S = 30.0
 _OLLAMA_MODEL = "gemma3:4b"
 
+
+def _format_few_shot_example(idx: int, example: FewShotExample) -> str:
+    """Formate un exemple en bloc texte : entete + JSON du plan + annotation."""
+    verdict = "valide" if example.is_valid else "rejete"
+    header = f"Exemple {idx} ({example.label}, {verdict}) :"
+    plan_json = example.plan.model_dump_json()
+    if example.is_valid or not example.rejection_reason:
+        return f"{header}\n{plan_json}"
+    return f"{header}\n{plan_json}\nMotif du rejet : {example.rejection_reason}"
+
+
+_FEW_SHOT_BLOCK = "\n\n".join(
+    _format_few_shot_example(i + 1, ex) for i, ex in enumerate(FEW_SHOT_EXAMPLES)
+)
+# Echappe les accolades du JSON pour str.format() applique plus bas.
+_FEW_SHOT_BLOCK_ESCAPED = _FEW_SHOT_BLOCK.replace("{", "{{").replace("}", "}}")
+
 _PLAN_PROMPT_TEMPLATE = (
-    "Tu es un nutritionniste. Genere un plan repas JSON pour {duration_days} jours.\n"
+    "Tu es un nutritionniste. Voici 3 exemples de plans valides ou rejetes :\n"
+    f"{_FEW_SHOT_BLOCK_ESCAPED}\n\n"
+    "Maintenant genere un plan repas JSON pour {duration_days} jours.\n"
     "Objectif : {objective}.\n"
     "Regime : {diet_type}.\n"
     "Allergies a eviter (aucun ingredient ne doit en contenir) : {allergies}.\n"

@@ -133,6 +133,43 @@ Slice 7 PRD #45 : on mesure deux niveaux sur les memes inputs aleatoires
 - Latence : p50 0 ms, p95 0 ms
 - Distribution retries : (vide)
 
+### Impact du few-shot prompting (issue #55)
+
+Slice 9 PRD #45 : 3 exemples statiques (omnivore weight_loss 7j, vegan + sans
+gluten 5j, plan rejete annote) sont prefixes au `_PLAN_PROMPT_TEMPLATE` des
+le 1er essai. Re-run du runner pipeline pour mesurer le gain.
+
+> Numeros a peupler par le runner. Lancer la commande ci-dessous avec et sans
+> le bloc few-shot (en commentant `_FEW_SHOT_BLOCK_ESCAPED` dans
+> `app/services/decrim_retry_orchestrator.py` pour le run "sans"). Reporter
+> les valeurs dans le tableau, puis revert.
+
+```bash
+python scripts/eval_metrics.py llm \
+    --n-generations 30 --n-constraint-plans 30 --seed 42
+```
+
+| Metrique | Sans few-shot | Avec few-shot | Delta |
+|---|---|---|---|
+| `pipeline.constraint_satisfaction` (full) | 0 | 0 | 0 |
+| `pipeline.partial_compliance` | 0 | 0 | 0 |
+| `pipeline.static_fallback` | 0 | 0 | 0 |
+| `pipeline.abandoned_503` | 0 | 0 | 0 |
+| `by_constraint.allergies` | 0 | 0 | 0 |
+| `by_constraint.budget` | 0 | 0 | 0 |
+| `by_constraint.diet` | 0 | 0 | 0 |
+| `latency_p50_ms` | 0 | 0 | 0 |
+| `latency_p95_ms` | 0 | 0 | 0 |
+| `retry_count_distribution` | (vide) | (vide) | - |
+
+Lecture attendue :
+- **Gain en constraint_satisfaction** : le few-shot fournit a Gemma3:4b une
+  reference syntaxique ET semantique (regime + budget tenus simultanement),
+  ce qui doit reduire le nombre de retries DeCRIM-light declenches.
+- **Surcout latence prefill** : le bloc few-shot ajoute ~2000 tokens de
+  prefill par 1er appel. Sur CPU, on attend +1 a +3 secondes p50 par
+  generation (offset par moins de retries en aval).
+
 ### Comparaison naive vs pipeline
 
 Une fois la passe pipeline executee, on attend :
