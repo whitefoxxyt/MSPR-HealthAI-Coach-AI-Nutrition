@@ -84,7 +84,7 @@ async def generate_with_retry(
 
         first = violations[0]
         if first.type in (ViolationType.allergy, ViolationType.diet):
-            meal_idx = first.meal_index or 0
+            meal_idx = first.meal_index if first.meal_index is not None else 0
             key = (first.day, meal_idx)
             if meal_retry_counts.get(key, 0) >= 2:
                 # Garde-fou anti-cycle : la meme position viole encore apres 2

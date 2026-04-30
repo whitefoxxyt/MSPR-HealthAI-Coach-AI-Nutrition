@@ -218,6 +218,46 @@ async def test_three_retries_fail_on_budget_returns_partial_budget(
     assert sum(m.est_budget_eur for m in plan.days[0].meals) == 15.0
 
 
+# T6bis : 3 retries echoues sur allergie -> fallback statique propre -> static_fallback.
+
+
+@pytest.mark.asyncio
+async def test_three_retries_fail_then_clean_fallback_returns_static_fallback(
+    mock_ollama: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    inputs = PlanInputs(
+        user_id=7,
+        objective="balance",
+        duration_days=1,
+        allergies=["arachides"],
+    )
+    bad_meal = _meal(name="Pad thai", ingredients=["sauce aux arachides", "riz"])
+    bad_plan = _plan_dict([[bad_meal]])
+    safe_meal = _meal(name="Salade poulet", ingredients=["poulet", "salade"])
+    safe_plan = _plan_dict([[safe_meal]])
+    # 4 reponses LLM toutes allergenes : initial + 2 partiels + 1 plan complet (garde-fou).
+    bad_meal_resp = _ollama_response(bad_meal)
+    mock_ollama.post(re.compile(r".*/api/generate$")).mock(
+        side_effect=[
+            httpx.Response(200, json=_ollama_response(bad_plan)),
+            httpx.Response(200, json=bad_meal_resp),
+            httpx.Response(200, json=bad_meal_resp),
+            httpx.Response(200, json=_ollama_response(bad_plan)),
+        ]
+    )
+    # Plan statique de fallback propre (pas d'arachides) -> static_fallback.
+    monkeypatch.setattr(
+        "app.services.decrim_retry_orchestrator.load_fallback_plan",
+        lambda _goal, _diet: safe_plan,
+    )
+
+    plan, status = await generate_with_retry(inputs)
+
+    assert status is ComplianceStatus.static_fallback
+    assert plan.days[0].meals[0].name == "Salade poulet"
+
+
 # T6 : garde-fou anti-cycle. Apres 2 retries partiels sur le meme repas,
 # basculer en retry complet du plan.
 
