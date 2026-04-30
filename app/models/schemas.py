@@ -17,6 +17,7 @@ class HealthGoal(str, Enum):
 
 # MealAnalysis
 
+
 class MealAnalysisItem(BaseModel):
     id: int
     detected_foods: list[dict[str, Any]]
@@ -42,7 +43,12 @@ class PaginatedAnalysesResponse(BaseModel):
                         "detected_foods": [
                             {"label": "pizza", "confidence": 0.85, "nutrition": {}}
                         ],
-                        "macros": {"calories": 1300, "protein_g": 30, "carbs_g": 160, "fat_g": 50},
+                        "macros": {
+                            "calories": 1300,
+                            "protein_g": 30,
+                            "carbs_g": 160,
+                            "fat_g": 50,
+                        },
                         "recommendations": ["Reduis la portion au prochain repas."],
                         "created_at": "2026-04-29T10:15:00",
                     }
@@ -56,6 +62,7 @@ class PaginatedAnalysesResponse(BaseModel):
 
 
 # NutritionGoal
+
 
 class NutritionGoalRequest(BaseModel):
     health_goal: HealthGoal | None = None
@@ -74,6 +81,7 @@ class NutritionGoalResponse(NutritionGoalRequest):
 
 
 # Plans repas fallback (issue NUT-8). Cf. POST /api/v1/generate-meal-plan.
+
 
 class MealMacros(BaseModel):
     calories: int
@@ -197,3 +205,18 @@ class RecommendationContext(BaseModel):
     user_id: int
     imbalance: Imbalance
     health_goal: HealthGoal
+
+
+# Tailles de portion PNNS (issue NUT-49). Cf. app/data/portion_sizes.py.
+
+
+class ServingSizeLabel(str, Enum):
+    small = "small"
+    medium = "medium"
+    large = "large"
+
+
+class ServingSize(BaseModel):
+    label: ServingSizeLabel
+    grams: int = Field(gt=0)
+    description: str | None = None
