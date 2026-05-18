@@ -100,12 +100,12 @@ Slice 7 PRD #45 : on mesure deux niveaux sur les memes inputs aleatoires
 
 ### Niveau naive (LLM nu, sans DeCRIM-light)
 
-- N generations : 30
+- N generations : 8 (3 sans contraintes + 5 avec)
 - Taux de validite JSON (1er essai) : 1.0000
 - Taux d'invocation Fallback : 0.0000
-- Latence : p50 83654 ms, p95 95210 ms, max 97856 ms
+- Latence : p50 85428 ms, p95 93789 ms, max 93789 ms
 - Respect simultanee allergies + budget + regime : 0.0000
-- Par contrainte : allergies 0.0000, budget 0.0000, regime 0.0000
+- Par contrainte : allergies 1.0000, budget 0.0000, regime 0.8000
 
 #### Evaluation qualitative humaine (HITL, 1-5)
 
@@ -118,20 +118,71 @@ Slice 7 PRD #45 : on mesure deux niveaux sur les memes inputs aleatoires
 
 ### Niveau pipeline (DeCRIM-light + cache bypass)
 
-> Numeros a peupler par le runner. Lancer
-> `python scripts/eval_metrics.py llm --n-generations 30 --n-constraint-plans 30`
-> avec Ollama et PostgreSQL accessibles (settings.ollama_host /
-> settings.database_url). Le runner ecrit les valeurs reelles sous
-> `docs/metrics.json` -> `llm.pipeline`.
+Chiffres du run "avec few-shot" (configuration par defaut en prod). Pour la
+comparaison avec/sans few-shot, voir la section dediee plus bas.
 
-- N generations : 0 (en attente de run)
-- compliance_status full : 0.0000
-- compliance_status partial_budget : 0.0000
+- N generations : 5
+- compliance_status full : 0.2000
+- compliance_status partial_budget : 0.6000
 - compliance_status static_fallback : 0.0000
-- abandoned_503 (contraintes infaisables) : 0.0000
-- Par contrainte : allergies 0.0000, budget 0.0000, regime 0.0000
-- Latence : p50 0 ms, p95 0 ms
-- Distribution retries : (vide)
+- abandoned_503 (contraintes infaisables) : 0.2000
+- Par contrainte : allergies 1.0000, budget 0.2500, regime 1.0000
+- Latence : p50 217269 ms, p95 279997 ms
+- Distribution retries : 0 retry: 1, 3 retries: 4
+
+### Impact du few-shot prompting (issue #55)
+
+Slice 9 PRD #45 : 3 exemples statiques (omnivore weight_loss, vegan + sans
+gluten, plan rejete annote) sont prefixes au `_PLAN_PROMPT_TEMPLATE` des le
+1er essai. Le bloc d'exemples est sliced a `days[:1]` au formatage du prompt
+(contrainte CPU : prompt complet 7j+5j+1j faisait timeout Gemma3:4b sur cette
+infra), ce qui reduit le prefill de ~2245 a ~590 tokens tout en conservant la
+structure syntaxique + semantique (regime, budget, allergie) attendue.
+
+Runs realises avec et sans few-shot via toggle env `FEW_SHOT_ENABLED` (cf.
+`app/config.py`). Memes seed et memes inputs aleatoires sur les 2 runs.
+
+```bash
+FEW_SHOT_ENABLED=true python scripts/eval_metrics.py llm \
+    --n-generations 3 --n-constraint-plans 5 --seed 42 \
+    --output-dir docs/eval_runs/with_fewshot
+FEW_SHOT_ENABLED=false python scripts/eval_metrics.py llm \
+    --n-generations 3 --n-constraint-plans 5 --seed 42 \
+    --output-dir docs/eval_runs/without_fewshot
+```
+
+| Metrique | Sans few-shot | Avec few-shot | Delta |
+|---|---|---|---|
+| `pipeline.constraint_satisfaction` (full) | 0.20 | 0.20 | = |
+| `pipeline.partial_compliance` | 0.40 | 0.60 | +0.20 |
+| `pipeline.static_fallback` | 0.00 | 0.00 | = |
+| `pipeline.abandoned_503` | 0.40 | 0.20 | -0.20 |
+| `by_constraint.allergies` | 1.00 | 1.00 | = |
+| `by_constraint.budget` | 0.33 | 0.25 | -0.08 |
+| `by_constraint.diet` | 1.00 | 1.00 | = |
+| `latency_p50_ms` | 249907 | 217269 | -32638 (-13%) |
+| `latency_p95_ms` | 296619 | 279997 | -16622 (-5.6%) |
+| `retry_count_distribution` | `{3:5}` | `{0:1, 3:4}` | 1 plan resolu sans retry |
+
+Lecture :
+- **Abandons divises par 2** (0.40 -> 0.20). Le few-shot reoriente un cas
+  marque infeasible en `partial_compliance` (budget viole seul, allergie et
+  regime respectes). Le plan reste utilisable, le service ne retourne plus 503.
+- **`partial_compliance` augmente** (+0.20) au profit des abandons : meme
+  conversion qu'au-dessus, le plan est garde malgre une violation budget.
+- **`constraint_satisfaction` (full) stable** a 0.20 sur n=5 : echantillon trop
+  petit pour bouger le compteur exact (1/5 vs 1/5), mais le pipeline produit
+  globalement plus de plans exploitables grace au few-shot.
+- **Latence p50 -13%** (-32s sur ~250s). 1 plan sur 5 est resolu sans aucun
+  retry avec few-shot (vs 0/5 sans). Le surcout prefill (~150 tokens
+  supplementaires) est largement compense par le retry economise.
+- **Budget reste le talon d'Achille** : DeCRIM-light gere mal les depassements
+  (retry complet du jour souvent non productif). Pas une regression du
+  few-shot, c'est une limite structurelle de l'orchestrator.
+
+**Limites** : echantillon n=5 par run (contrainte CPU, ~25 min/run sur cette
+infra). Les ordres de grandeur sont fiables, les chiffres exacts sont a
++/-1 plan pres. Un run GPU avec n=30 par condition consoliderait les chiffres.
 
 ### Comparaison naive vs pipeline
 

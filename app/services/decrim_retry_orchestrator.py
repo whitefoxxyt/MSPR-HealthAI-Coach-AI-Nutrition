@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import settings
+from app.data.plan_few_shot_examples import FEW_SHOT_EXAMPLES, FewShotExample
 from app.models.schemas import FallbackMealPlan, Meal, MealDay, PlanInputs
 from app.services.constraint_validator import (
     ConstraintSpec,
@@ -16,11 +17,38 @@ from app.services.constraint_validator import (
 )
 from app.services.fallback_loader import load_fallback_plan
 
-_OLLAMA_TIMEOUT_S = 30.0
+# 180s : Gemma3:4b sur CPU avec few-shot (issue #55) prend p50 ~85-95s, p95 ~120s
+# pour le 1er token. Le timeout d'origine 30s declenchait systematiquement le
+# fallback statique en eval pipeline (cf. slice 9). Aligne sur le runner naive.
+_OLLAMA_TIMEOUT_S = 180.0
 _OLLAMA_MODEL = "gemma3:4b"
 
-_PLAN_PROMPT_TEMPLATE = (
-    "Tu es un nutritionniste. Genere un plan repas JSON pour {duration_days} jours.\n"
+
+def _format_few_shot_example(idx: int, example: FewShotExample) -> str:
+    """Formate un exemple en bloc texte : entete + JSON (1er jour) + annotation.
+
+    Slice volontaire a days[:1] : Gemma3:4b sur CPU timeout au-dela de ~2000
+    tokens de prefill. Inclure le 1er jour suffit a transmettre la structure
+    attendue (schema + style) sans exploser le prompt. Les FEW_SHOT_EXAMPLES
+    restent complets (7j/5j/1j) pour les tests et un futur run GPU.
+    """
+    verdict = "valide" if example.is_valid else "rejete"
+    header = f"Exemple {idx} ({example.label}, {verdict}) :"
+    sliced = example.plan.model_copy(update={"days": example.plan.days[:1]})
+    plan_json = sliced.model_dump_json()
+    if example.is_valid or not example.rejection_reason:
+        return f"{header}\n{plan_json}"
+    return f"{header}\n{plan_json}\nMotif du rejet : {example.rejection_reason}"
+
+
+_FEW_SHOT_BLOCK = "\n\n".join(
+    _format_few_shot_example(i + 1, ex) for i, ex in enumerate(FEW_SHOT_EXAMPLES)
+)
+# Echappe les accolades du JSON pour str.format() applique plus bas.
+_FEW_SHOT_BLOCK_ESCAPED = _FEW_SHOT_BLOCK.replace("{", "{{").replace("}", "}}")
+
+_CORE_INSTRUCTION = (
+    "genere un plan repas JSON pour {duration_days} jours.\n"
     "Objectif : {objective}.\n"
     "Regime : {diet_type}.\n"
     "Allergies a eviter (aucun ingredient ne doit en contenir) : {allergies}.\n"
@@ -29,6 +57,14 @@ _PLAN_PROMPT_TEMPLATE = (
     "Pour chaque repas : name, macros (calories, protein_g, carbs_g, fat_g),\n"
     "ingredients (liste), est_budget_eur, prep_time_min. Mets fallback=false."
 )
+
+_PLAN_PROMPT_TEMPLATE = (
+    "Tu es un nutritionniste. Voici 3 exemples de plans valides ou rejetes :\n"
+    f"{_FEW_SHOT_BLOCK_ESCAPED}\n\n"
+    f"Maintenant {_CORE_INSTRUCTION}"
+)
+
+_PLAN_PROMPT_TEMPLATE_NO_FEW_SHOT = f"Tu es un nutritionniste. {_CORE_INSTRUCTION[0].upper()}{_CORE_INSTRUCTION[1:]}"
 
 _MEAL_REGEN_PROMPT_TEMPLATE = (
     "Ce repas a ete rejete car il contient {ingredient!r}. "
@@ -151,7 +187,12 @@ def _build_constraint_spec(inputs: PlanInputs) -> ConstraintSpec:
 
 
 def _build_plan_prompt(inputs: PlanInputs) -> str:
-    return _PLAN_PROMPT_TEMPLATE.format(
+    template = (
+        _PLAN_PROMPT_TEMPLATE
+        if settings.few_shot_enabled
+        else _PLAN_PROMPT_TEMPLATE_NO_FEW_SHOT
+    )
+    return template.format(
         duration_days=inputs.duration_days,
         objective=inputs.objective,
         diet_type=inputs.diet_type or "aucun",
@@ -211,6 +252,9 @@ async def _ollama_generate(prompt: str, schema: dict[str, Any]) -> str:
         "prompt": prompt,
         "stream": False,
         "format": schema,
+        # num_predict borne la sortie pour eviter le runaway sur CPU.
+        # 2048 tokens couvrent un plan 7j*3 repas en JSON compact.
+        "options": {"num_predict": 2048},
     }
     async with httpx.AsyncClient(timeout=_OLLAMA_TIMEOUT_S) as client:
         resp = await client.post(f"{settings.ollama_host}/api/generate", json=payload)

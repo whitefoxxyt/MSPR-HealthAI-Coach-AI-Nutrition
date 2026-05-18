@@ -8,10 +8,12 @@ import httpx
 import pytest
 import respx
 
+from app.data.plan_few_shot_examples import FEW_SHOT_EXAMPLES
 from app.models.schemas import FallbackMealPlan, PlanInputs
 from app.services.decrim_retry_orchestrator import (
     ComplianceStatus,
     InfeasibleConstraintsError,
+    _build_plan_prompt,
     generate_with_retry,
 )
 
@@ -55,6 +57,38 @@ def _plan_dict(
             {"day": idx + 1, "meals": meals} for idx, meals in enumerate(meals_per_day)
         ],
     }
+
+
+# T0 : few-shot prompting (issue #55). Le prompt initial doit inclure les 3
+# exemples + leurs labels + la rejection_reason du negatif, et l'instruction
+# "genere un plan" doit arriver apres le bloc d'exemples.
+
+
+def test_build_plan_prompt_includes_few_shot_block_before_generation_instruction() -> (
+    None
+):
+    inputs = PlanInputs(
+        user_id=42,
+        objective="balance",
+        duration_days=3,
+        diet_type="omnivore",
+    )
+    prompt = _build_plan_prompt(inputs)
+
+    # Tous les labels d'exemples sont presents.
+    for example in FEW_SHOT_EXAMPLES:
+        assert example.label in prompt
+
+    # La rejection_reason du negatif est explicite dans le prompt.
+    negative = next(e for e in FEW_SHOT_EXAMPLES if not e.is_valid)
+    assert negative.rejection_reason is not None
+    assert negative.rejection_reason in prompt
+
+    # Le mot 'exemples' apparait, et l'instruction de generation arrive apres.
+    examples_idx = prompt.lower().find("exemples")
+    generate_idx = prompt.lower().find("genere un plan")
+    assert examples_idx >= 0
+    assert generate_idx > examples_idx
 
 
 # T1 : tracer bullet. Plan valide au 1er essai -> ComplianceStatus.full.
