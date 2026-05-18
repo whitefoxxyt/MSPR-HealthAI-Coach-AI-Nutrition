@@ -33,9 +33,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_DATASET_URL = (
-    "https://huggingface.co/datasets/Matthijs/snacks/resolve/main/images.zip"
-)
+_DATASET_URL = "https://huggingface.co/datasets/Matthijs/snacks/resolve/main/images.zip"
 _SEED = 42
 
 # Mapping snacks -> Food-101. `None` signifie qu'on label `unknown` (plat

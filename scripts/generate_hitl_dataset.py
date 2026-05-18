@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from app.db.session import SessionLocal
-from app.models.schemas import DietType, FallbackMealPlan, HealthGoal, PlanInputs
+from app.models.schemas import DietType, HealthGoal, PlanInputs
 from app.services.decrim_retry_orchestrator import InfeasibleConstraintsError
 from app.services.fallback_loader import load_fallback_plan
 from app.services.llm_client import generate_plan
@@ -96,15 +96,11 @@ def _render_markdown(records: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     lines.append("# Plans HITL a annoter")
     lines.append("")
-    lines.append(
-        "Notez chaque plan sur trois dimensions (echelle 1-5), en aveugle :"
-    )
+    lines.append("Notez chaque plan sur trois dimensions (echelle 1-5), en aveugle :")
     lines.append("")
     lines.append("- nutrition : le plan est-il nutritionnellement coherent ?")
     lines.append("- originalite : les repas sont-ils varies, pas repetitifs ?")
-    lines.append(
-        "- coherence : les ingredients et le nom du repas correspondent-ils ?"
-    )
+    lines.append("- coherence : les ingredients et le nom du repas correspondent-ils ?")
     lines.append("")
     lines.append(
         "Ne lisez pas le bloc Contraintes avant d'avoir note (biais de confirmation)."
@@ -137,15 +133,15 @@ def _render_markdown(records: list[dict[str, Any]]) -> str:
                     f"prep {meal['prep_time_min']} min"
                 )
             lines.append("")
-        lines.append("<details><summary>Contraintes (a ne pas lire avant la note)</summary>")
+        lines.append(
+            "<details><summary>Contraintes (a ne pas lire avant la note)</summary>"
+        )
         lines.append("")
         inputs = record["inputs"]
         lines.append(f"- objectif : {inputs['objective']}")
         lines.append(f"- regime : {inputs.get('diet_type') or 'aucun'}")
         allergies = inputs.get("allergies") or []
-        lines.append(
-            f"- allergies : {', '.join(allergies) if allergies else 'aucune'}"
-        )
+        lines.append(f"- allergies : {', '.join(allergies) if allergies else 'aucune'}")
         lines.append(f"- budget journalier : {inputs.get('budget_per_day')} EUR")
         lines.append(f"- compliance_status : {record['compliance_status']}")
         warnings = record["compliance_warnings"]
@@ -167,8 +163,13 @@ async def main() -> None:
 
     records: list[dict[str, Any]] = []
     for i, inputs in enumerate(inputs_list):
-        logger.info("hitl : generation %d/%d (objective=%s, diet=%s)",
-                    i + 1, _N_PLANS, inputs.objective, inputs.diet_type)
+        logger.info(
+            "hitl : generation %d/%d (objective=%s, diet=%s)",
+            i + 1,
+            _N_PLANS,
+            inputs.objective,
+            inputs.diet_type,
+        )
         record = await _generate_one(i, inputs)
         records.append(record)
 
