@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.limiter import limiter
 from app.models.schemas import MealPlanRequest, MealPlanResponse, PaginatedPlansResponse
+from app.openapi_responses import with_ac_baseline
 from app.services import jwt_decoder, meal_plan_history, meal_plan_orchestrator
 from app.services.decrim_retry_orchestrator import InfeasibleConstraintsError
 
@@ -109,34 +110,35 @@ _PLAN_RESPONSE_EXAMPLE = {
     tags=["Plans"],
     summary="Genere un plan repas personnalise (1 a 30 jours)",
     description=_PLAN_DESCRIPTION,
-    responses={
-        200: {
-            "description": "Plan repas genere ou recupere du cache. `fallback: true` indique un repli matrice statique.",
-            "content": {"application/json": {"example": _PLAN_RESPONSE_EXAMPLE}},
-        },
-        401: {"description": "JWT manquant, malforme ou invalide."},
-        422: {
-            "description": "Payload invalide (regime inconnu, duree hors [1, 30], etc)."
-        },
-        429: {"description": "Rate limit depasse (10/heure ou 3/minute)."},
-        503: {
-            "description": (
-                "Contraintes infaisables (allergies / regime impossibles a satisfaire) "
-                "ou Ollama injoignable et fallback statique indisponible."
-            ),
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": (
-                            "Contraintes infaisables, ajustez vos contraintes "
-                            "(allergies / regime)."
-                        ),
-                        "infeasible": True,
+    responses=with_ac_baseline(
+        {
+            200: {
+                "description": "Plan repas genere ou recupere du cache. `fallback: true` indique un repli matrice statique.",
+                "content": {"application/json": {"example": _PLAN_RESPONSE_EXAMPLE}},
+            },
+            422: {
+                "description": "Payload invalide (regime inconnu, duree hors [1, 30], etc)."
+            },
+            429: {"description": "Rate limit depasse (10/heure ou 3/minute)."},
+            503: {
+                "description": (
+                    "Contraintes infaisables (allergies / regime impossibles a satisfaire) "
+                    "ou Ollama injoignable et fallback statique indisponible."
+                ),
+                "content": {
+                    "application/json": {
+                        "example": {
+                            "detail": (
+                                "Contraintes infaisables, ajustez vos contraintes "
+                                "(allergies / regime)."
+                            ),
+                            "infeasible": True,
+                        }
                     }
-                }
+                },
             },
         },
-    },
+    ),
 )
 @limiter.limit("10/hour;3/minute")
 async def generate_meal_plan(
@@ -227,15 +229,16 @@ _PLANS_HISTORY_RESPONSE_EXAMPLE = {
     tags=["Historique"],
     summary="Historique pagine des plans repas de l'utilisateur",
     description=_PLANS_HISTORY_DESCRIPTION,
-    responses={
-        200: {
-            "description": "Liste pagine de plans repas (tri decroissant sur generated_at).",
-            "content": {
-                "application/json": {"example": _PLANS_HISTORY_RESPONSE_EXAMPLE}
+    responses=with_ac_baseline(
+        {
+            200: {
+                "description": "Liste pagine de plans repas (tri decroissant sur generated_at).",
+                "content": {
+                    "application/json": {"example": _PLANS_HISTORY_RESPONSE_EXAMPLE}
+                },
             },
         },
-        401: {"description": "JWT manquant, malforme ou invalide."},
-    },
+    ),
 )
 def list_my_meal_plans(
     authorization: str | None = Header(default=None),

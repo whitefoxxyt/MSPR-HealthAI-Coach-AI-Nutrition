@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.schemas import NutritionGoalRequest, NutritionGoalResponse
+from app.openapi_responses import with_ac_baseline
 from app.services import jwt_decoder, profile_service
 
 router = APIRouter(prefix="/nutrition-goals")
@@ -89,16 +90,17 @@ _GOAL_REQUEST_EXAMPLES = {
     tags=["Profil"],
     summary="Recupere le profil nutritionnel de l'utilisateur",
     description=_GET_DESCRIPTION,
-    responses={
-        200: {
-            "description": "Profil nutritionnel courant.",
-            "content": {"application/json": {"example": _GOAL_RESPONSE_EXAMPLE}},
+    responses=with_ac_baseline(
+        {
+            200: {
+                "description": "Profil nutritionnel courant.",
+                "content": {"application/json": {"example": _GOAL_RESPONSE_EXAMPLE}},
+            },
+            404: {
+                "description": "Aucun profil nutritionnel configure (faire un PUT initial)."
+            },
         },
-        401: {"description": "JWT manquant, malforme ou invalide."},
-        404: {
-            "description": "Aucun profil nutritionnel configure (faire un PUT initial)."
-        },
-    },
+    ),
 )
 def get_my_profile(
     authorization: str | None = Header(default=None),
@@ -119,16 +121,17 @@ def get_my_profile(
     tags=["Profil"],
     summary="Cree ou met a jour le profil nutritionnel (upsert)",
     description=_PUT_DESCRIPTION,
-    responses={
-        200: {
-            "description": "Profil mis a jour (ou cree).",
-            "content": {"application/json": {"example": _GOAL_RESPONSE_EXAMPLE}},
+    responses=with_ac_baseline(
+        {
+            200: {
+                "description": "Profil mis a jour (ou cree).",
+                "content": {"application/json": {"example": _GOAL_RESPONSE_EXAMPLE}},
+            },
+            422: {
+                "description": "Payload invalide (objectif sante inconnu, valeurs non numeriques, etc)."
+            },
         },
-        401: {"description": "JWT manquant, malforme ou invalide."},
-        422: {
-            "description": "Payload invalide (objectif sante inconnu, valeurs non numeriques, etc)."
-        },
-    },
+    ),
 )
 def upsert_my_profile(
     payload: NutritionGoalRequest = Body(..., openapi_examples=_GOAL_REQUEST_EXAMPLES),

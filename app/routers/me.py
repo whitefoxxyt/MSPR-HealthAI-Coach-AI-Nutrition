@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.schemas import HealthGoal, MacroTargetsView, MeMacrosResponse
+from app.openapi_responses import with_ac_baseline
 from app.services import jwt_decoder, profile_service
 from app.services.nutrition_engine import (
     IncompleteProfile,
@@ -45,6 +46,32 @@ retourner une cible degradee.
 **Authentification** : header `Authorization: Bearer <jwt>` requis.
 """
 
+_MACROS_EXAMPLES = {
+    "complete_profile": {
+        "summary": "Profil complet : TDEE et macros calcules",
+        "value": {
+            "profile_completion_required": False,
+            "missing_fields": [],
+            "tdee": 2450,
+            "macros": {
+                "calories": 2450,
+                "protein_g": 184.0,
+                "carbs_g": 276.0,
+                "fat_g": 68.0,
+            },
+        },
+    },
+    "incomplete_profile": {
+        "summary": "Profil incomplet : champs manquants",
+        "value": {
+            "profile_completion_required": True,
+            "missing_fields": ["weight_kg", "height_cm"],
+            "tdee": None,
+            "macros": None,
+        },
+    },
+}
+
 
 @router.get(
     "/macros",
@@ -52,10 +79,14 @@ retourner une cible degradee.
     tags=["Profil"],
     summary="Cible journaliere TDEE et macros pour l'utilisateur",
     description=_DESCRIPTION,
-    responses={
-        200: {"description": "Cible journaliere ou liste des champs manquants."},
-        401: {"description": "JWT manquant, malforme ou invalide."},
-    },
+    responses=with_ac_baseline(
+        {
+            200: {
+                "description": "Cible journaliere ou liste des champs manquants.",
+                "content": {"application/json": {"examples": _MACROS_EXAMPLES}},
+            },
+        },
+    ),
 )
 def get_my_macros(
     authorization: str | None = Header(default=None),

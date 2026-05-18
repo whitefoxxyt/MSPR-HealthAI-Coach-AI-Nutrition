@@ -112,7 +112,15 @@ Les 3 tables coexistent dans le schema `public` avec les tables ETL existantes (
 
 ### JSONB pour les structures variables
 
-`detected_foods`, `macros`, `plan`, `constraints` sont des structures dont le schema peut evoluer (ajout de nouveaux champs au gre des iterations LLM ou des extensions du modele). `JSONB` permet ces evolutions sans migration. Tradeoff connu : pas de validation SQL des sous-structures, c'est Pydantic cote application qui assure le contrat.
+`detected_foods`, `macros`, `plan`, `constraints`, ainsi que les champs V11 `imbalances` et `serving_sizes`, sont des structures dont le schema peut evoluer (ajout de nouveaux champs au gre des iterations LLM ou des extensions du modele). `JSONB` permet ces evolutions sans migration. Tradeoff connu : pas de validation SQL des sous-structures, c'est Pydantic cote application qui assure le contrat.
+
+### TEXT plutot qu'ENUM pour les statuts
+
+`meal_plans.compliance_status` (V11 : `full` / `partial_budget` / `static_fallback`) et `meal_analyses.meal_type` (V11 : `breakfast` / `lunch` / `dinner` / `snack`) sont declares en `TEXT` plutot qu'en `CREATE TYPE ... AS ENUM`. Trois raisons :
+
+- **Evolution sans `ALTER TYPE`** : ajouter une valeur a un ENUM PostgreSQL force une migration explicite avec `ALTER TYPE ... ADD VALUE`, non transactionnelle avant PG12 et toujours fastidieuse. TEXT permet d'introduire un nouveau statut (ex. `partial_diet`) sans toucher au schema.
+- **Validation cote application** : `app/services/decrim_retry_orchestrator.ComplianceStatus` et `app/services/nutrition_engine.MealType` sont des `enum.StrEnum` Pydantic. Le contrat est verifie a l'ecriture et a la lecture par Pydantic ; un INSERT direct en SQL avec une valeur libre passerait, mais aucun code applicatif ne le fait.
+- **Coherence avec les autres champs textuels enum-like** : `nutrition_goals.diet_type` (`VARCHAR(50)`) et `nutrition_goals.health_goal` (`VARCHAR(30)` + CHECK) suivent deja ce pattern. `health_goal` ajoute une contrainte CHECK ; ce n'est pas fait pour `compliance_status` / `meal_type` car le set de valeurs est destine a evoluer plus frequemment.
 
 ## Liens avec les endpoints
 
