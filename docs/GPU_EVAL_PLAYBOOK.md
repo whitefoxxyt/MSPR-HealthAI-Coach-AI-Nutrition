@@ -79,92 +79,39 @@ remplacer `sliced.model_dump_json()` par `example.plan.model_dump_json()`.
 
 Ne pas commiter ce changement. Il est utile uniquement pour ce run GPU.
 
-## 4. Activer le GPU dans le compose Ollama
+## 4. Demarrer la stack via docker-compose.gpu-eval.yml
 
-Editer `docker-compose.yml`, service `ollama`, ajouter le bloc `deploy` :
-
-```yaml
-  ollama:
-    image: ollama/ollama:latest
-    container_name: mspr-ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - ai_internal
-    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull gemma3:4b && wait"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-```
-
-Comme pour l'etape 3 : ne pas commiter, c'est specifique au poste GPU.
-
-## 5. Demarrer la stack minimale
-
-L'eval a besoin de 3 services : PostgreSQL (avec les migrations V1 a V11),
-Ollama (avec gemma3:4b en VRAM), et le container `ai-nutrition` (pour le code
-applicatif et les dependances Python).
-
-### 5.1 Reseau partage
+Le repo embarque un compose dedie a l'eval GPU qui orchestre db + ollama (GPU) +
+ai-nutrition d'un coup, avec les bonnes config volumes / reseaux / migrations.
 
 ```bash
-docker network create mspr_data_network
+cp .env.example .env
+docker compose -f docker-compose.gpu-eval.yml up -d --build
 ```
 
-### 5.2 PostgreSQL avec les migrations
-
-Depuis le repo `MSPR-DB` (clone en etape 2) :
+Verification :
 
 ```bash
-cd ../MSPR-DB
-docker compose up -d db
-cd ../MSPR-HealthAI-Coach-AI-Nutrition
-```
+# La carte doit etre visible dans le container ollama
+docker exec mspr-ollama nvidia-smi
 
-Verifier que les migrations V1 a V11 se sont jouees :
+# gemma3:4b doit etre pulled (le compose le pull au demarrage, 2-5 min)
+docker exec mspr-ollama ollama list
 
-```bash
-docker exec mspr-healthai-db psql -U healthai_user -d healthai \
-  -c "SELECT version, applied_at FROM (SELECT 1) s; \
-      SELECT table_name FROM information_schema.tables \
-      WHERE table_schema='public' \
-      AND table_name IN ('meal_plans','meal_analyses','nutrition_goals');"
-```
+# Les 3 tables AI-Nutrition doivent exister (migrations V1-V12 jouees au boot db)
+docker exec mspr-healthai-db psql -U healthai_user -d healthai -c \
+  "SELECT table_name FROM information_schema.tables \
+   WHERE table_schema='public' \
+   AND table_name IN ('meal_plans','meal_analyses','nutrition_goals');"
 
-Les 3 tables doivent etre listees.
-
-### 5.3 Ollama avec GPU
-
-```bash
-docker compose up -d ollama
-```
-
-Verifier que le modele est pulled et que la carte est detectee :
-
-```bash
-docker exec mspr-ollama nvidia-smi      # doit afficher la carte
-docker exec mspr-ollama ollama list     # doit lister gemma3:4b
-```
-
-Le pull initial peut prendre 2 a 5 minutes selon le reseau.
-
-### 5.4 Build du container ai-nutrition
-
-```bash
-docker compose build ai-nutrition
-docker compose up -d ai-nutrition
-```
-
-Verifier que tout repond :
-
-```bash
+# Le service repond
 curl http://localhost:8001/health
 # {"status":"ok","postgres":"up","ollama":"up","timestamp":"..."}
 ```
+
+Si `nvidia-smi` echoue dans le container, c'est que NVIDIA Container Toolkit
+n'est pas configure. Sans GPU, Ollama tombera sur CPU et la latence sera
+identique au run CPU local (200 000+ ms par plan). Voir prerequis section 1.
 
 ## 5bis. (Optionnel) Relancer l'eval classifier avec eval terrain
 

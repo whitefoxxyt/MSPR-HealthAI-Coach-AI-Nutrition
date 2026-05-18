@@ -1,0 +1,114 @@
+# Stack autonome pour relancer l'eval LLM + classifier sur un poste GPU.
+# Cf. docs/GPU_EVAL_PLAYBOOK.md pour le workflow complet.
+#
+# Pre-requis poste GPU :
+# - Docker Engine 20.10+ avec compose v2
+# - NVIDIA Container Toolkit installe et configure
+#   (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+# - 8 Go de VRAM minimum, 12 Go de RAM, 10 Go de disque libre
+# - MSPR-DB clone en sibling : `../MSPR-DB/migrations/` doit exister
+#   (https://github.com/whitefoxxyt/MSPR-HealthAI-Coach-BDD)
+#
+# Lancement :
+#   cp .env.example .env
+#   docker compose -f docker-compose.gpu-eval.yml up -d --build
+#
+# Eval LLM (n=30, with / without few-shot) :
+#   docker exec mspr-ai-nutrition pip install --quiet matplotlib==3.9.2 datasets==3.2.0
+#
+#   docker exec -e FEW_SHOT_ENABLED=true -e MPLBACKEND=Agg -e PYTHONPATH=/app \
+#     mspr-ai-nutrition python scripts/eval_metrics.py llm \
+#       --n-generations 30 --n-constraint-plans 30 --seed 42 \
+#       --output-dir docs/eval_runs/with_fewshot
+#
+#   docker exec -e FEW_SHOT_ENABLED=false -e MPLBACKEND=Agg -e PYTHONPATH=/app \
+#     mspr-ai-nutrition python scripts/eval_metrics.py llm \
+#       --n-generations 30 --n-constraint-plans 30 --seed 42 \
+#       --output-dir docs/eval_runs/without_fewshot
+#
+# Eval classifier + terrain :
+#   docker exec -e MPLBACKEND=Agg -e PYTHONPATH=/app \
+#     mspr-ai-nutrition python scripts/eval_metrics.py classifier \
+#       --n-food101 5000 --terrain-dir data/eval_terrain --seed 42
+#
+# Generation HITL :
+#   docker exec mspr-ai-nutrition python scripts/generate_hitl_dataset.py
+
+services:
+  db:
+    image: postgres:17
+    container_name: mspr-healthai-db
+    environment:
+      POSTGRES_DB: healthai
+      POSTGRES_USER: healthai_user
+      POSTGRES_PASSWORD: password
+    volumes:
+      # Les migrations V1 a V12 sont jouees automatiquement au 1er demarrage.
+      - ../MSPR-DB/migrations:/docker-entrypoint-initdb.d:ro
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - mspr_data_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthai_user -d healthai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mspr-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai_internal
+    # Pull automatique de gemma3:4b au demarrage (~3 Go, 2-5 min sur reseau standard).
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull gemma3:4b && wait"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  ai-nutrition:
+    build: .
+    container_name: mspr-ai-nutrition
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: healthai
+      DB_USER: healthai_user
+      DB_PASSWORD: password
+      OLLAMA_HOST: http://ollama:11434
+      PYTHONPATH: /app
+    ports:
+      - "8001:8001"
+    volumes:
+      # Bind-mount du code et des sorties : permet de lancer les scripts d'eval
+      # sans rebuild de l'image, et de recuperer metrics.json / metrics.md / PNG
+      # depuis le host apres les runs.
+      - ./app:/app/app:ro
+      - ./scripts:/app/scripts:ro
+      - ./tests:/app/tests:ro
+      - ./data:/app/data:rw
+      - ./docs:/app/docs:rw
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - mspr_data_network
+      - ai_internal
+
+networks:
+  mspr_data_network:
+    driver: bridge
+  ai_internal:
+    driver: bridge
+
+volumes:
+  db_data:
+  ollama_data:
