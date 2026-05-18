@@ -326,6 +326,7 @@ async def _call_ollama_for_eval(
                     "prompt": prompt,
                     "stream": False,
                     "format": schema,
+                    "options": {"num_predict": 2048},
                 },
             )
             resp.raise_for_status()

@@ -933,13 +933,12 @@
   "generated_at": 1777534688,
   "llm": {
     "naive": {
-      "_note": "LLM nu (gemma3:4b sans DeCRIM-light). Numeros repris de l'eval pre-slice-7.",
       "by_constraint": {
-        "allergies": 0.0,
+        "allergies": 1.0,
         "budget": 0.0,
-        "diet": 0.0
+        "diet": 0.8
       },
-      "constraint_n_plans": 10,
+      "constraint_n_plans": 5,
       "constraint_satisfaction": 0.0,
       "fallback_rate": 0.0,
       "hitl": {
@@ -949,26 +948,63 @@
         "n_ratings": 0
       },
       "json_validity_rate": 1.0,
-      "latency_distribution_png": "docs/llm_latency_distribution.png",
-      "latency_max_ms": 97856.14665799994,
-      "latency_p50_ms": 83654.46811300013,
-      "latency_p95_ms": 95209.65956199996,
-      "n_generations": 30
+      "latency_distribution_png": "docs/eval_runs/with_fewshot/llm_latency_distribution.png",
+      "latency_max_ms": 93789.12909700011,
+      "latency_p50_ms": 85428.53262000062,
+      "latency_p95_ms": 93789.12909700011,
+      "n_generations": 8
     },
     "pipeline": {
-      "_note": "Structure cible (slice 7). Lancer `python scripts/eval_metrics.py llm` avec Ollama + PG accessibles pour peupler avec des mesures reelles.",
-      "abandoned_503": 0.0,
+      "abandoned_503": 0.2,
       "by_constraint": {
-        "allergies": 0.0,
-        "budget": 0.0,
-        "diet": 0.0
+        "allergies": 1.0,
+        "budget": 0.25,
+        "diet": 1.0
       },
-      "constraint_satisfaction": 0.0,
-      "latency_p50_ms": 0.0,
-      "latency_p95_ms": 0.0,
-      "n_generations": 0,
-      "partial_compliance": 0.0,
-      "retry_count_distribution": {},
+      "constraint_satisfaction": 0.2,
+      "latency_p50_ms": 217269.29900400047,
+      "latency_p95_ms": 279996.744131,
+      "n_generations": 5,
+      "partial_compliance": 0.6,
+      "retry_count_distribution": {
+        "0": 1,
+        "3": 4
+      },
+      "static_fallback": 0.0
+    },
+    "pipeline_without_fewshot": {
+      "abandoned_503": 0.4,
+      "by_constraint": {
+        "allergies": 1.0,
+        "budget": 0.3333333333333333,
+        "diet": 1.0
+      },
+      "constraint_satisfaction": 0.2,
+      "latency_p50_ms": 249906.96376899997,
+      "latency_p95_ms": 296618.6850459999,
+      "n_generations": 5,
+      "partial_compliance": 0.4,
+      "retry_count_distribution": {
+        "3": 5
+      },
+      "static_fallback": 0.0
+    },
+    "pipeline_with_fewshot": {
+      "abandoned_503": 0.2,
+      "by_constraint": {
+        "allergies": 1.0,
+        "budget": 0.25,
+        "diet": 1.0
+      },
+      "constraint_satisfaction": 0.2,
+      "latency_p50_ms": 217269.29900400047,
+      "latency_p95_ms": 279996.744131,
+      "n_generations": 5,
+      "partial_compliance": 0.6,
+      "retry_count_distribution": {
+        "0": 1,
+        "3": 4
+      },
       "static_fallback": 0.0
     }
   }

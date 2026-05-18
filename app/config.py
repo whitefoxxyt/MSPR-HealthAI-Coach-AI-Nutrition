@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     ollama_host: str = "http://ollama:11434"
     better_auth_secret: str = ""
     auth_api_url: str = "http://mspr-healthai-auth:3000"
+    # Toggle few-shot prompting (slice 9). Mis a false uniquement pour l'eval
+    # comparative "Impact du few-shot" dans docs/metrics.md.
+    few_shot_enabled: bool = True
 
     @property
     def database_url(self) -> str:
