@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.schemas import PaginatedAnalysesResponse
+from app.openapi_responses import with_ac_baseline
 from app.services import jwt_decoder, meal_analysis_history
 from app.services.meal_analysis_orchestrator import analyze_meal as orchestrate
 from app.services.nutrition_engine import MealType
@@ -133,16 +134,19 @@ _HISTORY_RESPONSE_EXAMPLE = {
     tags=["Analyse"],
     summary="Analyse une photo de repas (macros + recommandations IA)",
     description=_ANALYZE_DESCRIPTION,
-    responses={
-        200: {
-            "description": "Analyse reussie : macros, desequilibres et recommandations.",
-            "content": {"application/json": {"example": _ANALYZE_SUCCESS_EXAMPLE}},
+    responses=with_ac_baseline(
+        {
+            200: {
+                "description": "Analyse reussie : macros, desequilibres et recommandations.",
+                "content": {"application/json": {"example": _ANALYZE_SUCCESS_EXAMPLE}},
+            },
+            413: {"description": "Image trop volumineuse (limite 10 Mo)."},
+            415: {
+                "description": "Type MIME non supporte (utiliser JPEG, PNG ou WebP)."
+            },
+            422: {"description": "Image illisible, corrompue ou aucun aliment detecte."},
         },
-        401: {"description": "JWT manquant, malforme ou invalide."},
-        413: {"description": "Image trop volumineuse (limite 10 Mo)."},
-        415: {"description": "Type MIME non supporte (utiliser JPEG, PNG ou WebP)."},
-        422: {"description": "Image illisible, corrompue ou aucun aliment detecte."},
-    },
+    ),
 )
 async def analyze_meal(
     photo: UploadFile = File(
@@ -176,13 +180,14 @@ async def analyze_meal(
     tags=["Historique"],
     summary="Historique pagine des analyses de l'utilisateur",
     description=_HISTORY_DESCRIPTION,
-    responses={
-        200: {
-            "description": "Liste pagine d'analyses (tri decroissant sur created_at).",
-            "content": {"application/json": {"example": _HISTORY_RESPONSE_EXAMPLE}},
+    responses=with_ac_baseline(
+        {
+            200: {
+                "description": "Liste pagine d'analyses (tri decroissant sur created_at).",
+                "content": {"application/json": {"example": _HISTORY_RESPONSE_EXAMPLE}},
+            },
         },
-        401: {"description": "JWT manquant, malforme ou invalide."},
-    },
+    ),
 )
 def list_my_meal_analyses(
     authorization: str | None = Header(default=None),

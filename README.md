@@ -107,6 +107,16 @@ Codes d'erreur retournes :
 - `429` : rate limit depasse (`/generate-meal-plan` : 10/h et 3/min).
 - `503` : Ollama et fallback statique tous indisponibles.
 
+### Snapshot OpenAPI versionne
+
+Le contrat est commit en JSON dans `docs/openapi.json` (livrable #6 MSPR2). Regenerer apres toute modification d'un router :
+
+```bash
+python scripts/export_openapi.py
+```
+
+Le test `tests/test_openapi_doc.py::test_openapi_snapshot_is_up_to_date` echoue tant que le fichier n'est pas synchronise avec le schema courant. Commiter le diff avec la PR qui modifie l'API.
+
 ## Tests
 
 Le harnais utilise pytest, testcontainers (PostgreSQL ephemere) et respx (mocks HTTP).
