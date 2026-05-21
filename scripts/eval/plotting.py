@@ -79,7 +79,8 @@ def save_latency_comparison_png(
     data = [latencies_by_backend[k] for k in labels]
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    ax.boxplot(data, labels=labels, showfliers=True)
+    # matplotlib >=3.9 : `labels` renomme en `tick_labels` (drop en 3.11).
+    ax.boxplot(data, tick_labels=labels, showfliers=True)
     ax.set_ylabel("Latence (ms)")
     ax.set_title(title)
 

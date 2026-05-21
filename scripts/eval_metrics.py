@@ -4,17 +4,18 @@ respect des contraintes) et produit docs/metrics.json + docs/metrics.md.
 
 Sous-commandes :
   classifier  -> evalue HuggingFace nateraw/food sur Food-101 et terrain
-  llm         -> evalue Ollama gemma3:4b sur N generations
+  llm         -> evalue le LLM sur N generations (backend selectionne par
+                 LLM_BACKEND : ollama gemma3:4b local, ou mistral managed)
 
 Reproductibilite : seed fixe (--seed). Les chiffres restent stables a +/- 5%
 d'une execution a l'autre tant que :
   - le modele HuggingFace ne change pas (nateraw/food, version pin)
-  - le modele Ollama ne change pas (gemma3:4b)
+  - le modele LLM ne change pas (gemma3:4b cote Ollama, mistral-small managed)
   - le sampling utilise le meme seed.
 
 Usage :
   python scripts/eval_metrics.py classifier --n-food101 1000 --seed 42
-  python scripts/eval_metrics.py llm --n-generations 100 --seed 42
+  LLM_BACKEND=mistral python scripts/eval_metrics.py llm --n-generations 100
 """
 
 from __future__ import annotations
@@ -48,7 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_clf.add_argument("--seed", type=int, default=42)
     p_clf.add_argument("--output-dir", type=Path, default=Path("docs"))
 
-    p_llm = sub.add_parser("llm", help="Eval Ollama gemma3:4b")
+    p_llm = sub.add_parser(
+        "llm", help="Eval LLM (backend selectionne par LLM_BACKEND : ollama | mistral)"
+    )
     p_llm.add_argument("--n-generations", type=int, default=100)
     p_llm.add_argument(
         "--n-constraint-plans",

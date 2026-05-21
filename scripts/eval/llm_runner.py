@@ -1,15 +1,19 @@
 """
 Runner LLM : compare deux niveaux de pipeline sur les memes inputs aleatoires.
 
-  - llm.naive    : LLM nu (gemma3:4b sans DeCRIM-light), tel qu'utilise avant slice 7.
+  - llm.naive    : LLM nu (sans DeCRIM-light), tel qu'utilise avant slice 7.
                    Mesure validite JSON, latence, fallback, respect simultanee
                    allergies+budget+regime, et HITL.
   - llm.pipeline : pipeline complet (slice 7) generate_plan + decrim_retry_orchestrator.
                    Mesure compliance_status (full / partial_budget / static_fallback /
-                   abandoned_503), latence, retries Ollama, respect par contrainte.
+                   abandoned_503), latence, retries LLM, respect par contrainte.
+
+Backend selectionne par la var d'env LLM_BACKEND (slice 5 #75) : 'ollama' (defaut,
+gemma3:4b local) ou 'mistral' (mistral-small managed via API).
 
 Necessite :
-  - Ollama accessible (settings.ollama_host) et le modele gemma3:4b pull
+  - Backend cible accessible : Ollama (settings.ollama_host + modele pull) ou
+    Mistral (MISTRAL_API_KEY)
   - PostgreSQL accessible (settings.database_url) avec migrations V11+ jouees
 """
 
@@ -54,9 +58,6 @@ from scripts.eval.llm_metrics import (
 from scripts.eval.plotting import save_latency_distribution_png
 
 logger = logging.getLogger(__name__)
-
-_OLLAMA_MODEL = "gemma3:4b"
-_OLLAMA_TIMEOUT_S = 180.0
 
 
 def _resolve_backend() -> str:
@@ -342,7 +343,7 @@ def _spec_from_inputs(inputs: PlanInputs) -> ConstraintSpec:
     )
 
 
-# --- internes : generations brutes via Ollama (niveau naive) -----------------
+# --- internes : generations brutes via le provider LLM (niveau naive) --------
 
 
 async def _run_generations(
