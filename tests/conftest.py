@@ -82,6 +82,19 @@ def db_session(pg_engine: Engine) -> Generator[Session, None, None]:
         session.close()
 
 
+@pytest.fixture(autouse=True)
+def _force_ollama_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Defaut test : LLM_BACKEND=ollama, pour que les tests existants base sur
+    le mock respx /api/generate continuent de fonctionner sans modification.
+
+    Le defaut prod est `mistral` (PRD #71), surchargeable par les tests qui
+    veulent exercer explicitement le chemin Mistral.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "llm_backend", "ollama")
+
+
 @pytest.fixture
 def mock_ollama() -> Generator[respx.MockRouter, None, None]:
     """Intercepte les appels httpx vers Ollama via respx.

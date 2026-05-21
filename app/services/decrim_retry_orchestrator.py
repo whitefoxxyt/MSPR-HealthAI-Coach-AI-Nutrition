@@ -4,9 +4,7 @@ import json
 from enum import Enum
 from typing import Any
 
-import httpx
-
-from app.config import settings
+from app.config import settings  # noqa: F401 (reservee pour few_shot_enabled)
 from app.data.plan_few_shot_examples import FEW_SHOT_EXAMPLES, FewShotExample
 from app.models.schemas import FallbackMealPlan, Meal, MealDay, PlanInputs
 from app.services.constraint_validator import (
@@ -16,12 +14,7 @@ from app.services.constraint_validator import (
     validate as validate_constraints,
 )
 from app.services.fallback_loader import load_fallback_plan
-
-# 180s : Gemma3:4b sur CPU avec few-shot (issue #55) prend p50 ~85-95s, p95 ~120s
-# pour le 1er token. Le timeout d'origine 30s declenchait systematiquement le
-# fallback statique en eval pipeline (cf. slice 9). Aligne sur le runner naive.
-_OLLAMA_TIMEOUT_S = 180.0
-_OLLAMA_MODEL = "gemma3:4b"
+from app.services.llm_provider import get_provider
 
 
 def _format_few_shot_example(idx: int, example: FewShotExample) -> str:
@@ -64,7 +57,9 @@ _PLAN_PROMPT_TEMPLATE = (
     f"Maintenant {_CORE_INSTRUCTION}"
 )
 
-_PLAN_PROMPT_TEMPLATE_NO_FEW_SHOT = f"Tu es un nutritionniste. {_CORE_INSTRUCTION[0].upper()}{_CORE_INSTRUCTION[1:]}"
+_PLAN_PROMPT_TEMPLATE_NO_FEW_SHOT = (
+    f"Tu es un nutritionniste. {_CORE_INSTRUCTION[0].upper()}{_CORE_INSTRUCTION[1:]}"
+)
 
 _MEAL_REGEN_PROMPT_TEMPLATE = (
     "Ce repas a ete rejete car il contient {ingredient!r}. "
@@ -229,7 +224,7 @@ def _build_day_regen_prompt(
 
 
 async def _call_for_plan(prompt: str) -> FallbackMealPlan:
-    raw = await _ollama_generate(prompt, FallbackMealPlan.model_json_schema())
+    raw = await _llm_generate(prompt, FallbackMealPlan.model_json_schema())
     parsed = json.loads(raw)
     if isinstance(parsed, dict):
         parsed.setdefault("fallback", False)
@@ -237,30 +232,22 @@ async def _call_for_plan(prompt: str) -> FallbackMealPlan:
 
 
 async def _call_for_meal(prompt: str) -> Meal:
-    raw = await _ollama_generate(prompt, Meal.model_json_schema())
+    raw = await _llm_generate(prompt, Meal.model_json_schema())
     return Meal.model_validate_json(raw)
 
 
 async def _call_for_day(prompt: str) -> MealDay:
-    raw = await _ollama_generate(prompt, MealDay.model_json_schema())
+    raw = await _llm_generate(prompt, MealDay.model_json_schema())
     return MealDay.model_validate_json(raw)
 
 
-async def _ollama_generate(prompt: str, schema: dict[str, Any]) -> str:
-    payload: dict[str, Any] = {
-        "model": _OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "format": schema,
-        # num_predict borne la sortie pour eviter le runaway sur CPU.
-        # 2048 tokens couvrent un plan 7j*3 repas en JSON compact.
-        "options": {"num_predict": 2048},
-    }
-    async with httpx.AsyncClient(timeout=_OLLAMA_TIMEOUT_S) as client:
-        resp = await client.post(f"{settings.ollama_host}/api/generate", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-    return data.get("response", "")
+async def _llm_generate(prompt: str, schema: dict[str, Any]) -> str:
+    """Delegue au LLMProvider selectionne par `settings.llm_backend`.
+
+    Le cache, la flakiness HTTP, et la boucle DeCRIM-light sont geres ailleurs ;
+    ici on ne fait qu'un appel HTTP par tentative.
+    """
+    return await get_provider().generate(prompt, schema)
 
 
 def _replace_meal(

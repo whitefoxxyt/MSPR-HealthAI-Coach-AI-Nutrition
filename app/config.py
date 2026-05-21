@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     # Toggle few-shot prompting (slice 9). Mis a false uniquement pour l'eval
     # comparative "Impact du few-shot" dans docs/metrics.md.
     few_shot_enabled: bool = True
+    # Selecteur backend LLM (PRD #71, slice 1). Bascule entre les providers
+    # Ollama (local) et Mistral (managed). Defaut "mistral" pour l'eval et
+    # le free tier API ; surchargeable via LLM_BACKEND.
+    llm_backend: str = "mistral"
+    mistral_api_key: str = ""
+    mistral_model: str = "mistral-small-latest"
+    mistral_base_url: str = "https://api.mistral.ai/v1"
 
     @property
     def database_url(self) -> str:

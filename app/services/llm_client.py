@@ -25,6 +25,7 @@ from app.services.decrim_retry_orchestrator import (
     InfeasibleConstraintsError,
     generate_with_retry,
 )
+from app.services.llm_provider import OllamaProvider
 
 T = TypeVar("T")
 
@@ -258,22 +259,18 @@ def _parse_text_response(raw: str) -> str:
 
 
 async def _call_ollama_generate(prompt: str, json_schema: dict[str, Any] | None) -> str:
-    """Appelle Ollama /api/generate et retourne la chaine 'response'.
+    """Genere une recommandation textuelle via OllamaProvider.
 
-    json_schema=None pour les sorties textes libres (pas de format=...).
+    Config dediee : timeout court (30s, recos rapides) et pas de num_predict
+    (les recos sont courtes, on laisse Ollama gerer sa terminaison). Cette
+    path reste Ollama-only ; le selecteur multi-provider concerne le plan repas.
     """
-    payload: dict[str, Any] = {
-        "model": _OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-    }
-    if json_schema is not None:
-        payload["format"] = json_schema
-    async with httpx.AsyncClient(timeout=_OLLAMA_TIMEOUT_S) as client:
-        resp = await client.post(f"{settings.ollama_host}/api/generate", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-    return data.get("response", "")
+    provider = OllamaProvider(
+        base_url=settings.ollama_host,
+        timeout=_OLLAMA_TIMEOUT_S,
+        num_predict=None,
+    )
+    return await provider.generate(prompt, json_schema)
 
 
 def _build_compliance_warnings(
