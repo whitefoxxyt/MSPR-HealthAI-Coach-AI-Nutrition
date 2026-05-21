@@ -96,7 +96,12 @@ class MistralProvider(LLMProvider):
             )
             resp.raise_for_status()
             data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        # Defensif : mirror du pattern Ollama (`data.get("response", "")`). Une
+        # reponse 200 mais malformee renvoie "", ce qui declenche les retries
+        # cote llm_client (JSONDecodeError ou ValidationError) plutot qu'un
+        # KeyError non capture.
+        choices = data.get("choices") or [{}]
+        return choices[0].get("message", {}).get("content", "")
 
 
 def get_provider(name: str | None = None) -> LLMProvider:
@@ -108,6 +113,8 @@ def get_provider(name: str | None = None) -> LLMProvider:
     if backend == "ollama":
         return OllamaProvider(base_url=settings.ollama_host)
     if backend == "mistral":
+        if not settings.mistral_api_key:
+            raise ValueError("MISTRAL_API_KEY manquante alors que LLM_BACKEND=mistral.")
         return MistralProvider(
             api_key=settings.mistral_api_key,
             model=settings.mistral_model,

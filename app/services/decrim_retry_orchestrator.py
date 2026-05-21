@@ -4,7 +4,7 @@ import json
 from enum import Enum
 from typing import Any
 
-from app.config import settings  # noqa: F401 (reservee pour few_shot_enabled)
+from app.config import settings
 from app.data.plan_few_shot_examples import FEW_SHOT_EXAMPLES, FewShotExample
 from app.models.schemas import FallbackMealPlan, Meal, MealDay, PlanInputs
 from app.services.constraint_validator import (

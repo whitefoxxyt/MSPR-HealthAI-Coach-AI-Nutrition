@@ -21,9 +21,9 @@ def _assert_no_unresolved_refs(node: Any) -> None:
 def _assert_objects_have_additional_properties_false(node: Any) -> None:
     if isinstance(node, dict):
         if node.get("type") == "object":
-            assert (
-                node.get("additionalProperties") is False
-            ), f"objet sans additionalProperties=false : {node}"
+            assert node.get("additionalProperties") is False, (
+                f"objet sans additionalProperties=false : {node}"
+            )
         for v in node.values():
             _assert_objects_have_additional_properties_false(v)
     elif isinstance(node, list):

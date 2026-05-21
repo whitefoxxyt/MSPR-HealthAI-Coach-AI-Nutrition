@@ -196,9 +196,24 @@ def test_get_provider_explicit_ollama_returns_ollama_provider() -> None:
     assert isinstance(provider, OllamaProvider)
 
 
-def test_get_provider_explicit_mistral_returns_mistral_provider() -> None:
+def test_get_provider_explicit_mistral_returns_mistral_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import config
+
+    monkeypatch.setattr(config.settings, "mistral_api_key", "sk-test")
     provider = get_provider("mistral")
     assert isinstance(provider, MistralProvider)
+
+
+def test_get_provider_mistral_without_api_key_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import config
+
+    monkeypatch.setattr(config.settings, "mistral_api_key", "")
+    with pytest.raises(ValueError, match="MISTRAL_API_KEY"):
+        get_provider("mistral")
 
 
 def test_get_provider_unknown_backend_raises(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -215,4 +230,5 @@ def test_get_provider_default_reads_settings_llm_backend(
     assert isinstance(get_provider(), OllamaProvider)
 
     monkeypatch.setattr(config.settings, "llm_backend", "mistral")
+    monkeypatch.setattr(config.settings, "mistral_api_key", "sk-test")
     assert isinstance(get_provider(), MistralProvider)
