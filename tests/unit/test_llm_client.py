@@ -527,6 +527,45 @@ async def test_generate_plan_semaphore_limits_concurrent_ollama_calls(
     assert max_observed <= 2  # bornage du semaphore
 
 
+# generate_plan : fallback chain inter-providers (issue #73 / PRD #71 slice 2)
+
+
+@pytest.mark.asyncio
+async def test_generate_plan_falls_back_to_ollama_when_mistral_fails(
+    db_session,
+    mock_ollama: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mistral primaire down (500) -> bascule Ollama -> plan + compliance warning.
+
+    Verifie l'exigence PDF MSPR2 III.3 (fallback inter-API externes) :
+    le client recoit un plan generique (via Ollama) et un warning explicitant
+    quel backend a effectivement repondu.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "llm_backend", "mistral")
+    monkeypatch.setattr(settings, "mistral_api_key", "sk-test-invalid")
+
+    inputs = PlanInputs(user_id=60, objective="balance", duration_days=1)
+
+    mistral_route = mock_ollama.post(
+        "https://api.mistral.ai/v1/chat/completions"
+    ).respond(500, json={"error": "internal"})
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_response(_valid_plan_dict())
+    )
+
+    plan, status, warnings = await generate_plan(inputs, db_session)
+
+    assert plan.fallback is False
+    assert status is ComplianceStatus.full
+    assert mistral_route.called
+    assert any(
+        "Mistral" in w and "Ollama" in w for w in warnings
+    ), f"warnings={warnings!r}"
+
+
 # Tests generate_recommendation : voir tests/unit/test_llm_recommendation.py
 # (signature refactoree par l'issue #51 : list[ImbalanceTag] au lieu de
 # RecommendationContext, 1 seul appel Ollama au lieu de N).

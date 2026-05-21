@@ -25,6 +25,7 @@ from app.services.decrim_retry_orchestrator import (
     InfeasibleConstraintsError,
     generate_with_retry,
 )
+from app.services.fallback_chain import format_fallback_warning
 from app.services.llm_provider import OllamaProvider
 
 T = TypeVar("T")
@@ -111,12 +112,15 @@ async def generate_plan(
         if cached is not None:
             return cached
 
+    primary_backend = settings.llm_backend
     last_error: Exception | None = None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         start = time.monotonic()
         try:
             async with _OLLAMA_SEMAPHORE:
-                plan, status = await generate_with_retry(inputs)
+                plan, status, used_secondary = await generate_with_retry(
+                    inputs, primary_backend=primary_backend
+                )
         except InfeasibleConstraintsError:
             # On trace l'attempt avant de remonter pour que les ops puissent
             # correler la latence et l'inputs_hash avec le 503 cote router.
@@ -132,6 +136,8 @@ async def generate_plan(
             continue
 
         warnings = _build_compliance_warnings(plan, status, inputs)
+        if used_secondary is not None:
+            warnings.insert(0, format_fallback_warning(primary_backend, used_secondary))
         _persist_plan(db, plan, inputs_hash, inputs, status.value, warnings)
         _log_call(inputs_hash, start, attempt, "success")
         return plan, status, warnings

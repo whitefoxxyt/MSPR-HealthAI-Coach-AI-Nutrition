@@ -795,3 +795,56 @@ def test_compliance_persisted_to_meal_plans_table(
     # _persist_plan envoie systematiquement une liste (eventuellement vide)
     # cote SQLAlchemy : Postgres stocke un ARRAY vide, jamais NULL.
     assert row.compliance_warnings == []
+
+
+# Fallback chain inter-providers (issue #73 / PRD #71 slice 2).
+
+
+def test_generate_meal_plan_falls_back_to_ollama_when_mistral_unavailable(
+    client: TestClient,
+    valid_jwt: Callable[..., str],
+    mock_ollama: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
+) -> None:
+    """Demo soutenance : Mistral KO -> bascule Ollama -> warning explicite.
+
+    Repond a l'exigence PDF MSPR2 III.3 (fallback inter-API externes). Verifie
+    aussi que le compliance_warning est persiste dans `meal_plans` pour audit.
+    """
+    monkeypatch.setattr(settings, "llm_backend", "mistral")
+    monkeypatch.setattr(settings, "mistral_api_key", "sk-test-invalid")
+
+    mock_ollama.post("https://api.mistral.ai/v1/chat/completions").respond(
+        401, json={"error": "unauthorized"}
+    )
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_payload(_valid_plan())
+    )
+
+    response = client.post(
+        "/api/v1/generate-meal-plan",
+        json={
+            "health_goal": "balance",
+            "diet_type": "omnivore",
+            "duration_days": 1,
+            "allergies": [],
+            "budget_eur_per_day": 15,
+        },
+        headers={"Authorization": f"Bearer {valid_jwt(user_id=1004)}"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["fallback"] is False
+    assert body["compliance_status"] == "full"
+    assert any(
+        "Mistral indisponible" in w and "Ollama" in w
+        for w in body["compliance_warnings"]
+    ), f"compliance_warnings={body['compliance_warnings']!r}"
+
+    row = db_session.execute(
+        text("SELECT compliance_warnings FROM meal_plans WHERE user_id = 1004")
+    ).fetchone()
+    assert row is not None
+    assert any("Mistral indisponible" in w for w in row.compliance_warnings)

@@ -103,7 +103,7 @@ async def test_success_first_try_returns_full_status(
         200, json=_ollama_response(_plan_dict())
     )
 
-    plan, status = await generate_with_retry(inputs)
+    plan, status, _used = await generate_with_retry(inputs)
 
     assert isinstance(plan, FallbackMealPlan)
     assert status is ComplianceStatus.full
@@ -136,7 +136,7 @@ async def test_partial_retry_on_allergy_succeeds_at_attempt_two(
         ]
     )
 
-    plan, status = await generate_with_retry(inputs)
+    plan, status, _used = await generate_with_retry(inputs)
 
     assert status is ComplianceStatus.full
     assert plan.days[0].meals[0].name == "Salade poulet"
@@ -172,7 +172,7 @@ async def test_full_day_retry_on_budget_succeeds_at_attempt_two(
         ]
     )
 
-    plan, status = await generate_with_retry(inputs)
+    plan, status, _used = await generate_with_retry(inputs)
 
     assert status is ComplianceStatus.full
     day_2 = next(d for d in plan.days if d.day == 2)
@@ -245,7 +245,7 @@ async def test_three_retries_fail_on_budget_returns_partial_budget(
         ]
     )
 
-    plan, status = await generate_with_retry(inputs)
+    plan, status, _used = await generate_with_retry(inputs)
 
     assert status is ComplianceStatus.partial_budget
     # Le plan retourne reste celui issu du LLM (pas de fallback statique sur budget seul).
@@ -286,7 +286,7 @@ async def test_three_retries_fail_then_clean_fallback_returns_static_fallback(
         lambda _goal, _diet: safe_plan,
     )
 
-    plan, status = await generate_with_retry(inputs)
+    plan, status, _used = await generate_with_retry(inputs)
 
     assert status is ComplianceStatus.static_fallback
     assert plan.days[0].meals[0].name == "Salade poulet"
@@ -325,7 +325,7 @@ async def test_anti_cycle_switches_to_full_plan_retry(
         ]
     )
 
-    plan, status = await generate_with_retry(inputs)
+    plan, status, _used = await generate_with_retry(inputs)
 
     assert status is ComplianceStatus.full
     assert plan.days[0].meals[0].name == "Salade poulet"

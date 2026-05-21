@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import Any
 
@@ -13,8 +14,10 @@ from app.services.constraint_validator import (
     ViolationType,
     validate as validate_constraints,
 )
+from app.services.fallback_chain import FallbackChain, build_default_chain
 from app.services.fallback_loader import load_fallback_plan
-from app.services.llm_provider import get_provider
+
+LLMGen = Callable[[str, dict[str, Any]], Awaitable[str]]
 
 
 def _format_few_shot_example(idx: int, example: FewShotExample) -> str:
@@ -94,15 +97,31 @@ class InfeasibleConstraintsError(Exception):
 async def generate_with_retry(
     inputs: PlanInputs,
     max_retries: int = 3,
-) -> tuple[FallbackMealPlan, ComplianceStatus]:
+    chain: FallbackChain | None = None,
+    primary_backend: str | None = None,
+) -> tuple[FallbackMealPlan, ComplianceStatus, str | None]:
     """Genere un plan repas avec retries DeCRIM-light hybride.
 
     Strategie :
     - allergie / regime : retry partiel sur le repas violant uniquement
     - budget : retry complet du jour qui depasse
+
+    Retour : (plan, status, used_secondary). `used_secondary` est le nom du
+    backend secondaire effectivement utilise quand le primaire a echoue
+    (issue #73 / PRD #71 slice 2), None si le primaire a repondu sur tous
+    les appels. Permet au caller d'ajouter un compliance_warning explicite.
     """
+    primary = primary_backend or settings.llm_backend
+    active_chain = chain or build_default_chain()
+    used_backends: list[str] = []
+
+    async def llm_gen(prompt: str, schema: dict[str, Any]) -> str:
+        content, used = await active_chain.generate(prompt, schema, primary)
+        used_backends.append(used)
+        return content
+
     spec = _build_constraint_spec(inputs)
-    plan = await _call_for_plan(_build_plan_prompt(inputs))
+    plan = await _call_for_plan(_build_plan_prompt(inputs), llm_gen)
 
     # Compteur de retries partiels par (jour, repas) : permet de detecter
     # un cycle ou la meme position viole encore apres 2 regenerations ciblees.
@@ -111,7 +130,11 @@ async def generate_with_retry(
     for _ in range(max_retries):
         violations = validate_constraints(plan, spec)
         if not violations:
-            return plan, ComplianceStatus.full
+            return (
+                plan,
+                ComplianceStatus.full,
+                _pick_secondary_used(used_backends, primary),
+            )
 
         first = violations[0]
         if first.type in (ViolationType.allergy, ViolationType.diet):
@@ -120,20 +143,30 @@ async def generate_with_retry(
             if meal_retry_counts.get(key, 0) >= 2:
                 # Garde-fou anti-cycle : la meme position viole encore apres 2
                 # regenerations ciblees. On bascule en retry complet du plan.
-                plan = await _call_for_plan(_build_plan_prompt(inputs))
+                plan = await _call_for_plan(_build_plan_prompt(inputs), llm_gen)
                 meal_retry_counts.clear()
                 continue
             meal_retry_counts[key] = meal_retry_counts.get(key, 0) + 1
-            new_meal = await _call_for_meal(_build_meal_regen_prompt(first, inputs))
+            new_meal = await _call_for_meal(
+                _build_meal_regen_prompt(first, inputs), llm_gen
+            )
             plan = _replace_meal(plan, first.day, meal_idx, new_meal)
             continue
 
         if first.type is ViolationType.budget:
-            new_day = await _call_for_day(_build_day_regen_prompt(plan, first, spec))
+            new_day = await _call_for_day(
+                _build_day_regen_prompt(plan, first, spec), llm_gen
+            )
             plan = _replace_day(plan, first.day, new_day)
             continue
 
-    return _resolve_after_retries(plan, inputs, spec)
+    plan, status = _resolve_after_retries(plan, inputs, spec)
+    return plan, status, _pick_secondary_used(used_backends, primary)
+
+
+def _pick_secondary_used(used_backends: list[str], primary: str) -> str | None:
+    """Premier backend non-primaire effectivement utilise, sinon None."""
+    return next((b for b in used_backends if b != primary), None)
 
 
 def _resolve_after_retries(
@@ -223,31 +256,22 @@ def _build_day_regen_prompt(
     )
 
 
-async def _call_for_plan(prompt: str) -> FallbackMealPlan:
-    raw = await _llm_generate(prompt, FallbackMealPlan.model_json_schema())
+async def _call_for_plan(prompt: str, llm_gen: LLMGen) -> FallbackMealPlan:
+    raw = await llm_gen(prompt, FallbackMealPlan.model_json_schema())
     parsed = json.loads(raw)
     if isinstance(parsed, dict):
         parsed.setdefault("fallback", False)
     return FallbackMealPlan.model_validate(parsed)
 
 
-async def _call_for_meal(prompt: str) -> Meal:
-    raw = await _llm_generate(prompt, Meal.model_json_schema())
+async def _call_for_meal(prompt: str, llm_gen: LLMGen) -> Meal:
+    raw = await llm_gen(prompt, Meal.model_json_schema())
     return Meal.model_validate_json(raw)
 
 
-async def _call_for_day(prompt: str) -> MealDay:
-    raw = await _llm_generate(prompt, MealDay.model_json_schema())
+async def _call_for_day(prompt: str, llm_gen: LLMGen) -> MealDay:
+    raw = await llm_gen(prompt, MealDay.model_json_schema())
     return MealDay.model_validate_json(raw)
-
-
-async def _llm_generate(prompt: str, schema: dict[str, Any]) -> str:
-    """Delegue au LLMProvider selectionne par `settings.llm_backend`.
-
-    Le cache, la flakiness HTTP, et la boucle DeCRIM-light sont geres ailleurs ;
-    ici on ne fait qu'un appel HTTP par tentative.
-    """
-    return await get_provider().generate(prompt, schema)
 
 
 def _replace_meal(
