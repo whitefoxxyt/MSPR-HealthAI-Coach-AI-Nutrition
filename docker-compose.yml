@@ -37,6 +37,7 @@ services:
       - ./scripts:/app/scripts:ro
       - ./tests:/app/tests:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./docs:/app/docs:ro
       - ../MSPR-DB/migrations:/migrations:ro
     environment:
       MIGRATIONS_DIR: /migrations

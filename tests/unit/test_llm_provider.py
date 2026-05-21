@@ -188,7 +188,7 @@ async def test_mistral_provider_propagates_5xx() -> None:
         assert exc.value.response.status_code == 500
 
 
-# get_provider : factory lit settings.llm_backend.
+# get_provider : factory lit settings.default_llm.
 
 
 def test_get_provider_explicit_ollama_returns_ollama_provider() -> None:
@@ -221,14 +221,14 @@ def test_get_provider_unknown_backend_raises(monkeypatch: pytest.MonkeyPatch) ->
         get_provider("anthropic")
 
 
-def test_get_provider_default_reads_settings_llm_backend(
+def test_get_provider_default_reads_settings_default_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app import config
 
-    monkeypatch.setattr(config.settings, "llm_backend", "ollama")
+    monkeypatch.setattr(config.settings, "default_llm", "ollama")
     assert isinstance(get_provider(), OllamaProvider)
 
-    monkeypatch.setattr(config.settings, "llm_backend", "mistral")
+    monkeypatch.setattr(config.settings, "default_llm", "mistral")
     monkeypatch.setattr(config.settings, "mistral_api_key", "sk-test")
     assert isinstance(get_provider(), MistralProvider)

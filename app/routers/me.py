@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.schemas import HealthGoal, MacroTargetsView, MeMacrosResponse
 from app.openapi_responses import with_ac_baseline
-from app.services import jwt_decoder, profile_service
+from app.services import jwt_decoder, profile_service, user_preferences_service
 from app.services.nutrition_engine import (
     IncompleteProfile,
     build_user_profile,
     compute_macro_targets,
     compute_tdee,
 )
+from app.services.user_preferences_service import PreferencesUpdate, PreferencesView
 
 router = APIRouter(prefix="/me")
 
@@ -124,3 +125,32 @@ def get_my_macros(
             fat_g=macros.fat_g,
         ),
     )
+
+
+@router.get(
+    "/preferences",
+    response_model=PreferencesView,
+    tags=["Profil"],
+    summary="Preferences LLM de l'utilisateur",
+)
+def get_my_preferences(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> PreferencesView:
+    user_id = _user_id_from_auth(authorization)
+    return user_preferences_service.get_preferences(user_id, db)
+
+
+@router.patch(
+    "/preferences",
+    response_model=PreferencesView,
+    tags=["Profil"],
+    summary="Met a jour les preferences LLM de l'utilisateur",
+)
+def patch_my_preferences(
+    payload: PreferencesUpdate,
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> PreferencesView:
+    user_id = _user_id_from_auth(authorization)
+    return user_preferences_service.update_preferences(user_id, db, payload)

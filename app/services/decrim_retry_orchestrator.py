@@ -111,7 +111,7 @@ async def generate_with_retry(
     (issue #73 / PRD #71 slice 2), None si le primaire a repondu sur tous
     les appels. Permet au caller d'ajouter un compliance_warning explicite.
     """
-    primary = primary_backend or settings.llm_backend
+    primary = primary_backend or settings.default_llm
     active_chain = chain or build_default_chain()
     used_backends: list[str] = []
 

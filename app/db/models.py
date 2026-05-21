@@ -49,6 +49,11 @@ class MealPlan(Base):
     compliance_status = Column(Text, nullable=False, server_default=text("'full'"))
     # Strings explicitant les relachements de contraintes (V11).
     compliance_warnings = Column(ARRAY(Text))
+    # Backend LLM qui a effectivement genere le plan (V13). Sert au filtre cache
+    # backend-aware et a l'audit. DEFAULT 'ollama' pour les lignes pre-V13.
+    llm_backend_used = Column(
+        String(20), nullable=False, server_default=text("'ollama'")
+    )
     generated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
@@ -69,3 +74,7 @@ class NutritionGoal(Base):
     weight_kg = Column(Numeric(5, 2))
     height_cm = Column(Numeric(5, 2))
     activity_level = Column(String(20))
+    # Preference utilisateur pour le backend LLM (V13). NULL = utiliser le
+    # defaut env (settings.default_llm). Valeurs autorisees au niveau BDD via
+    # CHECK ('ollama', 'mistral').
+    preferred_llm = Column(String(20))

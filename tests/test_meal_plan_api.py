@@ -800,6 +800,103 @@ def test_compliance_persisted_to_meal_plans_table(
 # Fallback chain inter-providers (issue #73 / PRD #71 slice 2).
 
 
+# Slice 3 PRD #71 : selecteur user du backend LLM via /me/preferences.
+
+
+def test_user_pref_ollama_persists_llm_backend_used_ollama(
+    client: TestClient,
+    valid_jwt: Callable[..., str],
+    mock_ollama: respx.MockRouter,
+    db_session: Session,
+) -> None:
+    """User pref preferred_llm=ollama -> plan genere via Ollama et trace en BDD."""
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id=1100)}"}
+    client.patch(
+        "/api/v1/me/preferences", json={"preferred_llm": "ollama"}, headers=headers
+    )
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_payload(_valid_plan())
+    )
+
+    response = client.post(
+        "/api/v1/generate-meal-plan",
+        json={
+            "health_goal": "balance",
+            "diet_type": "omnivore",
+            "duration_days": 1,
+            "allergies": [],
+            "budget_eur_per_day": 15,
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    row = db_session.execute(
+        text("SELECT llm_backend_used FROM meal_plans WHERE user_id = 1100")
+    ).fetchone()
+    assert row is not None
+    assert row.llm_backend_used == "ollama"
+
+
+def test_user_pref_switch_invalidates_cache_and_regenerates(
+    client: TestClient,
+    valid_jwt: Callable[..., str],
+    mock_ollama: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+    db_session: Session,
+) -> None:
+    """Switch pref Ollama -> Mistral : meme inputs produisent un nouveau plan.
+
+    Sans le filtre cache backend-aware (AC slice 3), le 2eme appel servirait
+    le plan cache Ollama. Verifie la separation effective du cache par backend.
+    """
+    monkeypatch.setattr(settings, "mistral_api_key", "sk-test-valid")
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id=1101)}"}
+    body = {
+        "health_goal": "balance",
+        "diet_type": "omnivore",
+        "duration_days": 1,
+        "allergies": [],
+        "budget_eur_per_day": 15,
+    }
+
+    client.patch(
+        "/api/v1/me/preferences", json={"preferred_llm": "ollama"}, headers=headers
+    )
+    mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_payload(_valid_plan(marker_calories=111))
+    )
+    mock_ollama.post("https://api.mistral.ai/v1/chat/completions").respond(
+        200,
+        json={
+            "choices": [
+                {"message": {"content": json.dumps(_valid_plan(marker_calories=222))}}
+            ]
+        },
+    )
+
+    first = client.post("/api/v1/generate-meal-plan", json=body, headers=headers)
+    assert first.status_code == 200, first.text
+
+    client.patch(
+        "/api/v1/me/preferences", json={"preferred_llm": "mistral"}, headers=headers
+    )
+
+    second = client.post("/api/v1/generate-meal-plan", json=body, headers=headers)
+    assert second.status_code == 200, second.text
+
+    # 2 lignes meal_plans : une par backend, hash identique mais backend distinct.
+    rows = db_session.execute(
+        text(
+            "SELECT llm_backend_used FROM meal_plans WHERE user_id = 1101 "
+            "ORDER BY generated_at"
+        )
+    ).fetchall()
+    assert [r.llm_backend_used for r in rows] == ["ollama", "mistral"]
+    # Le 2eme appel renvoie le plan Mistral (marker 222), pas le cache Ollama (111).
+    assert second.json()["days"][0]["meals"][0]["macros"]["calories"] == 222
+
+
 def test_generate_meal_plan_falls_back_to_ollama_when_mistral_unavailable(
     client: TestClient,
     valid_jwt: Callable[..., str],
@@ -812,7 +909,7 @@ def test_generate_meal_plan_falls_back_to_ollama_when_mistral_unavailable(
     Repond a l'exigence PDF MSPR2 III.3 (fallback inter-API externes). Verifie
     aussi que le compliance_warning est persiste dans `meal_plans` pour audit.
     """
-    monkeypatch.setattr(settings, "llm_backend", "mistral")
+    monkeypatch.setattr(settings, "default_llm", "mistral")
     monkeypatch.setattr(settings, "mistral_api_key", "sk-test-invalid")
 
     mock_ollama.post("https://api.mistral.ai/v1/chat/completions").respond(

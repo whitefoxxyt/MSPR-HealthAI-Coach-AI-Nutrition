@@ -544,7 +544,7 @@ async def test_generate_plan_falls_back_to_ollama_when_mistral_fails(
     """
     from app.config import settings
 
-    monkeypatch.setattr(settings, "llm_backend", "mistral")
+    monkeypatch.setattr(settings, "default_llm", "mistral")
     monkeypatch.setattr(settings, "mistral_api_key", "sk-test-invalid")
 
     inputs = PlanInputs(user_id=60, objective="balance", duration_days=1)

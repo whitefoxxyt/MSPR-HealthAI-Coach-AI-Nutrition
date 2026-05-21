@@ -771,6 +771,112 @@
           }
         }
       }
+    },
+    "/api/v1/me/preferences": {
+      "get": {
+        "tags": [
+          "Profil"
+        ],
+        "summary": "Preferences LLM de l'utilisateur",
+        "operationId": "get_my_preferences_api_v1_me_preferences_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Profil"
+        ],
+        "summary": "Met a jour les preferences LLM de l'utilisateur",
+        "operationId": "patch_my_preferences_api_v1_me_preferences_patch",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -830,6 +936,19 @@
         ],
         "title": "Gender"
       },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
       "HealthGoal": {
         "type": "string",
         "enum": [
@@ -839,6 +958,15 @@
           "sport_performance"
         ],
         "title": "HealthGoal"
+      },
+      "LLMBackend": {
+        "type": "string",
+        "enum": [
+          "ollama",
+          "mistral"
+        ],
+        "title": "LLMBackend",
+        "description": "Backends LLM supportes (PRD #71). Toute autre valeur est rejetee."
       },
       "MacroTargetsView": {
         "properties": {
@@ -1596,6 +1724,79 @@
           "offset": 0,
           "total": 17
         }
+      },
+      "PreferencesUpdate": {
+        "properties": {
+          "preferred_llm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LLMBackend"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "PreferencesUpdate",
+        "description": "Payload PATCH /me/preferences. preferred_llm=null reset au defaut env."
+      },
+      "PreferencesView": {
+        "properties": {
+          "preferred_llm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LLMBackend"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_llm": {
+            "$ref": "#/components/schemas/LLMBackend"
+          }
+        },
+        "type": "object",
+        "required": [
+          "effective_llm"
+        ],
+        "title": "PreferencesView",
+        "description": "Reponse GET/PATCH /me/preferences.\n\npreferred_llm : valeur brute persistee pour cet utilisateur (None si jamais\n                definie ou explicitement reset).\neffective_llm : backend effectivement utilise par l'orchestrator\n                (preference user OR settings.default_llm)."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
       }
     }
   },

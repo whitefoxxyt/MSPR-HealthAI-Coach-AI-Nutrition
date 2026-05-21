@@ -17,7 +17,7 @@ from testcontainers.postgres import PostgresContainer
 
 MIGRATIONS_DIR = Path(os.environ.get("MIGRATIONS_DIR", "/migrations"))
 MIGRATION_PATTERN = re.compile(r"^V(\d+)__.*\.sql$")
-MAX_MIGRATION_VERSION = 12  # V11 (slice 1, PRD #45) + V12 (slice 2, biometrie)
+MAX_MIGRATION_VERSION = 13  # V12 (biometrie) + V13 (PRD #71 slice 3, llm_backend_used + preferred_llm)
 
 TEST_AUTH_SECRET = "test-secret-not-for-prod-do-not-use"
 TEST_OLLAMA_HOST = "http://ollama-test:11434"
@@ -84,7 +84,7 @@ def db_session(pg_engine: Engine) -> Generator[Session, None, None]:
 
 @pytest.fixture(autouse=True)
 def _force_ollama_backend(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Defaut test : LLM_BACKEND=ollama, pour que les tests existants base sur
+    """Defaut test : DEFAULT_LLM=ollama, pour que les tests existants base sur
     le mock respx /api/generate continuent de fonctionner sans modification.
 
     Le defaut prod est `mistral` (PRD #71), surchargeable par les tests qui
@@ -92,7 +92,7 @@ def _force_ollama_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     from app.config import settings
 
-    monkeypatch.setattr(settings, "llm_backend", "ollama")
+    monkeypatch.setattr(settings, "default_llm", "ollama")
 
 
 @pytest.fixture

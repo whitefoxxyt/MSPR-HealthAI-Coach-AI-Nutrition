@@ -89,6 +89,7 @@ async def generate_plan(
     db: Session,
     bypass_cache: bool = False,
     fallback_loader: Callable[[str, str], dict[str, Any] | None] | None = None,
+    primary_backend: str | None = None,
 ) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]]:
     """Genere un plan repas en deleguant la boucle DeCRIM-light a l'orchestrator.
 
@@ -106,13 +107,13 @@ async def generate_plan(
     1ere tentative reussit avec status non-full, on s'arrete.
     """
     inputs_hash = compute_inputs_hash(inputs)
+    primary_backend = primary_backend or settings.default_llm
 
     if not bypass_cache:
-        cached = _lookup_cached_plan(db, inputs.user_id, inputs_hash)
+        cached = _lookup_cached_plan(db, inputs.user_id, inputs_hash, primary_backend)
         if cached is not None:
             return cached
 
-    primary_backend = settings.llm_backend
     last_error: Exception | None = None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         start = time.monotonic()
@@ -136,9 +137,14 @@ async def generate_plan(
             continue
 
         warnings = _build_compliance_warnings(plan, status, inputs)
+        # Le backend reellement utilise est used_secondary si la chain a fallback,
+        # sinon le primaire. C'est lui qu'on persiste et qu'on filtrera au cache.
+        backend_used = used_secondary or primary_backend
         if used_secondary is not None:
             warnings.insert(0, format_fallback_warning(primary_backend, used_secondary))
-        _persist_plan(db, plan, inputs_hash, inputs, status.value, warnings)
+        _persist_plan(
+            db, plan, inputs_hash, inputs, status.value, warnings, backend_used
+        )
         _log_call(inputs_hash, start, attempt, "success")
         return plan, status, warnings
 
@@ -148,7 +154,9 @@ async def generate_plan(
         inputs_hash,
         last_error,
     )
-    return _build_fallback_plan(inputs, inputs_hash, db, fallback_loader)
+    return _build_fallback_plan(
+        inputs, inputs_hash, db, fallback_loader, primary_backend
+    )
 
 
 # Generation de recommandation textuelle
@@ -311,9 +319,12 @@ def _build_compliance_warnings(
 
 
 def _lookup_cached_plan(
-    db: Session, user_id: int, inputs_hash: str
+    db: Session, user_id: int, inputs_hash: str, backend: str
 ) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]] | None:
-    """Recupere le dernier plan en cache (< 7 jours) pour ce inputs_hash.
+    """Recupere le dernier plan en cache (< 7 jours) pour ce (user, hash, backend).
+
+    Filtre par backend (PRD #71 slice 3) : un switch user Ollama -> Mistral
+    doit produire un nouveau plan plutot que servir le cache cross-backend.
 
     Renvoie aussi compliance_status et compliance_warnings tels que persistes.
     Filtre redondant sur user_id : le hash inclut deja user_id, mais l'expliciter
@@ -325,11 +336,12 @@ def _lookup_cached_plan(
             "SELECT plan, compliance_status, compliance_warnings FROM meal_plans "
             "WHERE user_id = :uid "
             "AND inputs_hash = :h "
+            "AND llm_backend_used = :b "
             "AND generated_at > NOW() - INTERVAL '7 days' "
             "ORDER BY generated_at DESC "
             "LIMIT 1"
         ),
-        {"uid": user_id, "h": inputs_hash},
+        {"uid": user_id, "h": inputs_hash, "b": backend},
     ).fetchone()
     if row is None:
         return None
@@ -346,6 +358,7 @@ def _persist_plan(
     inputs: PlanInputs,
     compliance_status: str,
     compliance_warnings: list[str],
+    llm_backend_used: str,
 ) -> None:
     """Insere une ligne meal_plans avec le plan complet, son inputs_hash et le compliance.
 
@@ -355,9 +368,9 @@ def _persist_plan(
     db.execute(
         text(
             "INSERT INTO meal_plans (user_id, plan, objective, constraints, "
-            "inputs_hash, compliance_status, compliance_warnings) "
+            "inputs_hash, compliance_status, compliance_warnings, llm_backend_used) "
             "VALUES (:uid, CAST(:plan AS JSONB), :obj, CAST(:cons AS JSONB), :h, "
-            ":status, :warnings)"
+            ":status, :warnings, :backend)"
         ),
         {
             "uid": inputs.user_id,
@@ -367,6 +380,7 @@ def _persist_plan(
             "h": inputs_hash,
             "status": compliance_status,
             "warnings": list(compliance_warnings or []),
+            "backend": llm_backend_used,
         },
     )
     db.flush()
@@ -377,12 +391,18 @@ def _build_fallback_plan(
     inputs_hash: str,
     db: Session,
     fallback_loader: Callable[[str, str], dict[str, Any] | None] | None,
+    primary_backend: str,
 ) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]]:
     """Construit un plan en mode degrade : matrice statique ou squelette vide.
 
     Cas LLM injoignable apres tous les retries flakiness (Slice 2 : la chain
     Mistral <-> Ollama a aussi echoue sur chaque tentative). Le plan retourne
     porte status=static_fallback et un warning explicitant la cause.
+
+    On persiste avec primary_backend : le plan statique n'a pas ete genere par
+    un LLM, mais on attribue la ligne au backend "demande" pour la coherence du
+    filtre cache (un switch user re-tentera l'autre backend plutot que servir
+    ce static fallback en cache).
     """
     raw: dict[str, Any] | None = None
     if fallback_loader is not None:
@@ -401,6 +421,7 @@ def _build_fallback_plan(
         inputs,
         ComplianceStatus.static_fallback.value,
         warnings,
+        primary_backend,
     )
     return plan, ComplianceStatus.static_fallback, warnings
 

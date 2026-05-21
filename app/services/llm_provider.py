@@ -107,9 +107,9 @@ class MistralProvider(LLMProvider):
 def get_provider(name: str | None = None) -> LLMProvider:
     """Factory : retourne un provider configure depuis `app.config.settings`.
 
-    name=None -> lit settings.llm_backend.
+    name=None -> lit settings.default_llm.
     """
-    backend = (name or settings.llm_backend).lower()
+    backend = (name or settings.default_llm).lower()
     if backend == "ollama":
         return OllamaProvider(base_url=settings.ollama_host)
     if backend == "mistral":

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings
 
 # Reperes ANSES (rapport "Actualisation des reperes du PNNS", 2016 ;
@@ -23,10 +25,14 @@ class Settings(BaseSettings):
     # Toggle few-shot prompting (slice 9). Mis a false uniquement pour l'eval
     # comparative "Impact du few-shot" dans docs/metrics.md.
     few_shot_enabled: bool = True
-    # Selecteur backend LLM (PRD #71, slice 1). Bascule entre les providers
-    # Ollama (local) et Mistral (managed). Defaut "mistral" pour l'eval et
-    # le free tier API ; surchargeable via LLM_BACKEND.
-    llm_backend: str = "mistral"
+    # Defaut LLM (PRD #71). Renomme de llm_backend en default_llm au slice 3
+    # pour refleter qu'il s'agit d'une valeur de repli quand l'utilisateur
+    # n'a pas exprime de preference (NutritionGoal.preferred_llm). L'env var
+    # DEFAULT_LLM remplace LLM_BACKEND ; voir .env.example.
+    # Literal pour fail-fast au boot si l'env est mal configure : sans ca une
+    # valeur invalide ne casserait qu'au runtime via LLMBackend(...) cote
+    # user_preferences_service / llm_provider.
+    default_llm: Literal["ollama", "mistral"] = "mistral"
     mistral_api_key: str = ""
     mistral_model: str = "mistral-small-latest"
     mistral_base_url: str = "https://api.mistral.ai/v1"
