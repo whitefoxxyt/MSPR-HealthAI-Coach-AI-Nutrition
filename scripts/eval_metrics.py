@@ -111,7 +111,15 @@ def _run_llm_eval(args: argparse.Namespace) -> int:
 
 
 def _persist(section_payload: dict[str, Any], output_dir: Path, section: str) -> None:
-    """Merge la section calculee dans docs/metrics.json puis re-rend metrics.md."""
+    """Merge la section calculee dans docs/metrics.json puis re-rend metrics.md.
+
+    Pour la section `llm` (slice 5 #75) on merge plutot qu'on ecrase : les
+    runs Gemma / Mistral N=20 / Mistral N=100 s'empilent sous des cles dediees
+    (`gemma_n20`, `mistral_n20`, `mistral_n100`) au fil des executions
+    successives, sans perdre les precedents. Et apres merge, on rend le PNG
+    comparatif `llm_latency_distribution.png` agregeant les latences brutes de
+    tous les runs presents.
+    """
     from scripts.eval.report import dump_metrics_json, render_metrics_md
 
     metrics_json = output_dir / "metrics.json"
@@ -120,12 +128,38 @@ def _persist(section_payload: dict[str, Any], output_dir: Path, section: str) ->
     full: dict[str, Any] = {}
     if metrics_json.exists():
         full = json.loads(metrics_json.read_text(encoding="utf-8"))
-    full[section] = section_payload
+    if section == "llm":
+        existing = full.get(section) or {}
+        full[section] = {**existing, **section_payload}
+    else:
+        full[section] = section_payload
     full["generated_at"] = int(time.time())
 
     dump_metrics_json(full, metrics_json)
+    if section == "llm":
+        _maybe_render_latency_comparison_png(full.get("llm") or {}, output_dir)
     render_metrics_md(full, metrics_md)
     logger.info("metriques exportees : %s + %s", metrics_json, metrics_md)
+
+
+def _maybe_render_latency_comparison_png(
+    llm_section: dict[str, Any], output_dir: Path
+) -> None:
+    """Genere le PNG boxplot multi-backend si au moins un run apporte des
+    latences brutes (`naive.latencies_ms_raw`)."""
+    from scripts.eval.plotting import save_latency_comparison_png
+
+    series: dict[str, list[float]] = {}
+    for run_key, run in llm_section.items():
+        if not isinstance(run, dict):
+            continue
+        latencies = ((run.get("naive") or {}).get("latencies_ms_raw")) or []
+        if latencies:
+            series[run_key] = [float(v) for v in latencies]
+
+    if not series:
+        return
+    save_latency_comparison_png(series, output_dir / "llm_latency_distribution.png")
 
 
 if __name__ == "__main__":

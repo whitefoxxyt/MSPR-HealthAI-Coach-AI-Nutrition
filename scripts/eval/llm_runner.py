@@ -18,6 +18,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import random
 import time
 from collections.abc import AsyncIterator
@@ -28,13 +29,13 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from app.config import settings
 from app.models.schemas import (
     DietType,
     FallbackMealPlan,
     HealthGoal,
     PlanInputs,
 )
+from app.services.llm_provider import LLMProvider, get_provider
 from scripts.eval.llm_metrics import (
     ConstraintCheck,
     ConstraintSpec,
@@ -58,6 +59,24 @@ _OLLAMA_MODEL = "gemma3:4b"
 _OLLAMA_TIMEOUT_S = 180.0
 
 
+def _resolve_backend() -> str:
+    """Lit LLM_BACKEND env var (defaut ollama, retrocompat slice 5 #75)."""
+    return os.environ.get("LLM_BACKEND", "ollama").lower()
+
+
+_BACKEND_ALIASES = {"ollama": "gemma"}
+
+
+def _run_key(backend: str, n: int) -> str:
+    """Cle metrics.json pour un run donne : alias + nombre de generations.
+
+    Convention slice 5 (#75) : 'ollama' s'affiche 'gemma_n<N>' (l'utilisateur
+    parle du modele, pas du serveur d'inference). Mistral garde son nom.
+    """
+    alias = _BACKEND_ALIASES.get(backend.lower(), backend.lower())
+    return f"{alias}_n{n}"
+
+
 _PROMPT_TEMPLATE = (
     "Tu es un nutritionniste. Genere un plan repas JSON pour {duration} jours.\n"
     "Objectif : {objective}.\n"
@@ -77,21 +96,38 @@ async def run_llm_eval(
     seed: int,
     output_dir: Path,
 ) -> dict[str, Any]:
-    """Renvoie un payload llm pour metrics.json avec deux niveaux : naive + pipeline."""
+    """Renvoie un payload llm keye par run (slice 5 #75).
+
+    Forme : `{<run_key>: {backend, naive, pipeline}}` ou `<run_key>` est par
+    exemple `gemma_n20` ou `mistral_n100`. Le backend est lu depuis l'env var
+    `LLM_BACKEND` (defaut ollama). Permet d'empiler 3 runs comparatifs dans le
+    meme `docs/metrics.json` (cf. _persist qui merge la section llm).
+    """
+    backend = _resolve_backend()
+    provider = get_provider(backend)
+
     naive_payload = await _run_naive_eval(
         n_generations=n_generations,
         n_constraint_plans=n_constraint_plans,
         hitl_csv=hitl_csv,
         seed=seed,
         output_dir=output_dir,
+        provider=provider,
     )
 
     pipeline_payload = await _run_pipeline_eval(
         n=n_constraint_plans,
         seed=seed,
+        primary_backend=backend,
     )
 
-    return {"naive": naive_payload, "pipeline": pipeline_payload}
+    return {
+        _run_key(backend, n_constraint_plans): {
+            "backend": backend,
+            "naive": naive_payload,
+            "pipeline": pipeline_payload,
+        }
+    }
 
 
 # Niveau naive : LLM nu (gemma3:4b sans DeCRIM-light, sans cache, sans persistance).
@@ -103,13 +139,16 @@ async def _run_naive_eval(
     hitl_csv: Path,
     seed: int,
     output_dir: Path,
+    provider: LLMProvider,
 ) -> dict[str, Any]:
     """Eval du LLM nu : pas de retry sur contraintes, pas de fallback hierarchique."""
     logger.info("llm.naive : %d generations en conditions normales", n_generations)
-    outcomes = await _run_generations(n_generations, with_constraints=False, seed=seed)
+    outcomes = await _run_generations(
+        n_generations, with_constraints=False, seed=seed, provider=provider
+    )
 
     constraint_outcomes, constraint_checks = await _run_constraint_eval(
-        n_constraint_plans, seed=seed
+        n_constraint_plans, seed=seed, provider=provider
     )
     outcomes.extend(constraint_outcomes)
 
@@ -130,6 +169,9 @@ async def _run_naive_eval(
         "constraint_n_plans": len(constraint_checks),
         "by_constraint": by_constraint_satisfaction(constraint_checks),
         "latency_distribution_png": str(latency_png) if successful_latencies else None,
+        # Slice 5 (#75) : conserve les latences brutes pour le PNG comparatif
+        # multi-backend rendu apres tous les runs (cf. eval_metrics._persist).
+        "latencies_ms_raw": successful_latencies,
     }
 
     if hitl_csv.exists():
@@ -153,21 +195,25 @@ async def _run_naive_eval(
 # Niveau pipeline : generate_plan complet (DeCRIM-light + cache bypass + persistance).
 
 
-async def _run_pipeline_eval(n: int, seed: int) -> dict[str, Any]:
+async def _run_pipeline_eval(n: int, seed: int, primary_backend: str) -> dict[str, Any]:
     """Genere n plans via le pipeline complet, memes inputs que _run_constraint_eval.
 
-    Compte les compliance_status, mesure latence + retries Ollama, et calcule
+    Compte les compliance_status, mesure latence + retries LLM, et calcule
     le respect par contrainte (allergies / budget / diet) sur les plans rendus.
+    `primary_backend` selectionne ollama vs mistral (slice 5 #75).
     """
-    # Imports tardifs : ces modules touchent a la BDD et a Ollama, on ne les
+    # Imports tardifs : ces modules touchent a la BDD et au LLM, on ne les
     # charge que dans le pipeline eval (le naive eval reste DB-less).
     from app.db.session import SessionLocal
-    from app.services import decrim_retry_orchestrator
     from app.services.decrim_retry_orchestrator import InfeasibleConstraintsError
     from app.services.fallback_loader import load_fallback_plan
     from app.services.llm_client import generate_plan
 
-    logger.info("llm.pipeline : %d generations via generate_plan (bypass_cache)", n)
+    logger.info(
+        "llm.pipeline : %d generations via generate_plan (bypass_cache, backend=%s)",
+        n,
+        primary_backend,
+    )
 
     pipeline_outcomes: list[PipelineOutcome] = []
     rng = random.Random(seed + 1)  # Meme seed que _run_constraint_eval -> memes inputs.
@@ -176,7 +222,7 @@ async def _run_pipeline_eval(n: int, seed: int) -> dict[str, Any]:
         inputs = _random_inputs(rng, i, with_constraints=True)
         spec = _spec_from_inputs(inputs)
 
-        async with _count_ollama_calls(decrim_retry_orchestrator) as call_counter:
+        async with _instrument_chain_calls() as call_counter:
             start = time.monotonic()
             try:
                 with _ephemeral_session(SessionLocal) as db:
@@ -185,6 +231,7 @@ async def _run_pipeline_eval(n: int, seed: int) -> dict[str, Any]:
                         db,
                         bypass_cache=True,
                         fallback_loader=load_fallback_plan,
+                        primary_backend=primary_backend,
                     )
                 latency_ms = (time.monotonic() - start) * 1000
                 check = check_plan_constraints(plan, spec)
@@ -225,25 +272,49 @@ async def _run_pipeline_eval(n: int, seed: int) -> dict[str, Any]:
     }
 
 
-@contextlib.asynccontextmanager
-async def _count_ollama_calls(orchestrator_module: Any) -> AsyncIterator[dict[str, int]]:
-    """Wrappe `_ollama_generate` du module orchestrator pour compter les appels.
+class _CountingChain:
+    """Wrapper API-compatible FallbackChain qui compte les appels generate().
 
-    Reset a 0 a l'entree ; restauration de l'original a la sortie. Compatible
-    avec une seule generation a la fois (l'eval est sequentielle).
+    Slice 5 (#75) remplace l'ancien monkeypatch sur `_ollama_generate` (purge au
+    slice 2 au profit du chain multi-provider). On compte au niveau du chain car
+    c'est l'unite d'inference du nouveau pipeline.
     """
+
+    def __init__(self, inner: Any, counter: dict[str, int]) -> None:
+        self._inner = inner
+        self._counter = counter
+
+    async def generate(
+        self,
+        prompt: str,
+        schema: dict[str, Any] | None,
+        primary_backend: str,
+    ) -> tuple[str, str]:
+        self._counter["calls"] += 1
+        return await self._inner.generate(prompt, schema, primary_backend)
+
+
+@contextlib.asynccontextmanager
+async def _instrument_chain_calls() -> AsyncIterator[dict[str, int]]:
+    """Patche `build_default_chain` cote decrim_retry_orchestrator pour produire
+    un chain comptant les appels generate(). Restaure l'original a la sortie.
+
+    Slice 5 (#75) remplace `_count_ollama_calls` casse depuis slice 2 (la fct
+    `_ollama_generate` qu'il patchait n'existe plus).
+    """
+    from app.services import decrim_retry_orchestrator as orch
+
     counter: dict[str, int] = {"calls": 0}
-    original = orchestrator_module._ollama_generate
+    original_builder = orch.build_default_chain
 
-    async def wrapper(prompt: str, schema: dict[str, Any]) -> str:
-        counter["calls"] += 1
-        return await original(prompt, schema)
+    def patched_builder() -> _CountingChain:
+        return _CountingChain(original_builder(), counter)
 
-    orchestrator_module._ollama_generate = wrapper
+    orch.build_default_chain = patched_builder
     try:
         yield counter
     finally:
-        orchestrator_module._ollama_generate = original
+        orch.build_default_chain = original_builder
 
 
 @contextlib.contextmanager
@@ -278,13 +349,14 @@ async def _run_generations(
     n: int,
     with_constraints: bool,
     seed: int,
+    provider: LLMProvider,
 ) -> list[GenerationOutcome]:
     """Genere n plans 'normaux' (pas de contraintes), mesure validite + latence."""
     outcomes: list[GenerationOutcome] = []
     rng = random.Random(seed)
     for i in range(n):
         inputs = _random_inputs(rng, i, with_constraints=with_constraints)
-        outcome, _ = await _call_ollama_for_eval(inputs)
+        outcome, _ = await _call_for_eval(provider, inputs)
         outcomes.append(outcome)
     return outcomes
 
@@ -292,6 +364,7 @@ async def _run_generations(
 async def _run_constraint_eval(
     n: int,
     seed: int,
+    provider: LLMProvider,
 ) -> tuple[list[GenerationOutcome], list[ConstraintCheck]]:
     """Genere n plans contraints (allergies + budget + regime) et evalue le respect."""
     outcomes: list[GenerationOutcome] = []
@@ -300,40 +373,32 @@ async def _run_constraint_eval(
     for i in range(n):
         inputs = _random_inputs(rng, i, with_constraints=True)
         spec = _spec_from_inputs(inputs)
-        outcome, plan = await _call_ollama_for_eval(inputs)
+        outcome, plan = await _call_for_eval(provider, inputs)
         outcomes.append(outcome)
         if plan is not None and not outcome.used_fallback:
             checks.append(check_plan_constraints(plan, spec))
     return outcomes, checks
 
 
-async def _call_ollama_for_eval(
+async def _call_for_eval(
+    provider: LLMProvider,
     inputs: PlanInputs,
 ) -> tuple[GenerationOutcome, FallbackMealPlan | None]:
-    """Appel Ollama brut. On evite generate_plan (DB requise) et on instrumente
-    nous-memes la validite JSON 1er essai et la latence wallclock."""
+    """Appel LLM brut via le provider injecte (slice 5 #75).
+
+    On evite generate_plan (DB requise) et on instrumente nous-memes la
+    validite JSON 1er essai et la latence wallclock. Le provider gere les
+    specificites HTTP (format Ollama, response_format Mistral strict).
+    """
     prompt = _build_prompt(inputs)
     schema = FallbackMealPlan.model_json_schema()
 
     start = time.monotonic()
-    raw_response: str | None = None
     try:
-        async with httpx.AsyncClient(timeout=_OLLAMA_TIMEOUT_S) as client:
-            resp = await client.post(
-                f"{settings.ollama_host}/api/generate",
-                json={
-                    "model": _OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False,
-                    "format": schema,
-                    "options": {"num_predict": 2048},
-                },
-            )
-            resp.raise_for_status()
-            raw_response = resp.json().get("response", "")
+        raw_response = await provider.generate(prompt, schema)
     except httpx.HTTPError as exc:
         latency_ms = (time.monotonic() - start) * 1000
-        logger.warning("eval ollama HTTPError : %s", exc)
+        logger.warning("eval llm HTTPError : %s", exc)
         return (
             GenerationOutcome(
                 json_valid_first_try=False,

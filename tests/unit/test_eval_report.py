@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from scripts.eval.report import dump_metrics_json, render_metrics_md
 
@@ -104,6 +105,112 @@ def test_render_metrics_md_includes_required_sections(tmp_path: Path) -> None:
     # Embed des PNGs
     assert "docs/confusion_matrix_food101.png" in content
     assert "docs/llm_latency.png" in content
+
+
+def _run_payload(
+    *,
+    allergies: float,
+    diet: float,
+    p50: float,
+    p95: float,
+    json_valid: float,
+    compliance_full: float,
+    retries: dict[str, int],
+) -> dict[str, Any]:
+    return {
+        "naive": {
+            "n_generations": 20,
+            "json_validity_rate": json_valid,
+            "fallback_rate": 0.0,
+            "latency_p50_ms": p50,
+            "latency_p95_ms": p95,
+            "latency_max_ms": p95,
+            "constraint_satisfaction": 0.0,
+            "by_constraint": {"allergies": allergies, "budget": 0.5, "diet": diet},
+        },
+        "pipeline": {
+            "n_generations": 20,
+            "constraint_satisfaction": compliance_full,
+            "partial_compliance": 0.0,
+            "static_fallback": 0.0,
+            "abandoned_503": 0.0,
+            "by_constraint": {"allergies": allergies, "budget": 0.5, "diet": diet},
+            "latency_p50_ms": p50,
+            "latency_p95_ms": p95,
+            "retry_count_distribution": retries,
+        },
+    }
+
+
+def test_render_metrics_md_shows_gemma_vs_mistral_comparison(tmp_path: Path) -> None:
+    """Slice 5 (#75) : tableau side-by-side + bloc bonus N=100."""
+    payload: dict[str, Any] = {
+        "llm": {
+            "gemma_n20": {
+                "backend": "ollama",
+                **_run_payload(
+                    allergies=0.8,
+                    diet=0.7,
+                    p50=120000.0,
+                    p95=250000.0,
+                    json_valid=0.85,
+                    compliance_full=0.25,
+                    retries={"0": 5, "3": 15},
+                ),
+            },
+            "mistral_n20": {
+                "backend": "mistral",
+                **_run_payload(
+                    allergies=1.0,
+                    diet=0.95,
+                    p50=3500.0,
+                    p95=6800.0,
+                    json_valid=1.0,
+                    compliance_full=0.55,
+                    retries={"0": 18, "1": 2},
+                ),
+            },
+            "mistral_n100": {
+                "backend": "mistral",
+                **_run_payload(
+                    allergies=0.98,
+                    diet=0.94,
+                    p50=3600.0,
+                    p95=7200.0,
+                    json_valid=0.99,
+                    compliance_full=0.52,
+                    retries={"0": 90, "1": 10},
+                ),
+            },
+        }
+    }
+    out = tmp_path / "metrics.md"
+
+    from scripts.eval.report import render_metrics_md
+
+    render_metrics_md(payload, out)
+
+    content = out.read_text(encoding="utf-8")
+    # Section comparative principale
+    assert "Comparaison Gemma3:4b local vs Mistral Small managed" in content
+    # Tableau avec entete cible
+    assert "| Metrique | Gemma3:4b local | Mistral Small managed |" in content
+    # Les 5 metriques + retry count
+    for label in (
+        "compliance_status=full",
+        "allergy compliance",
+        "diet compliance",
+        "JSON validity",
+        "latence p50",
+        "latence p95",
+        "retry count moyen",
+    ):
+        assert label in content, f"Metrique attendue absente du MD : {label}"
+    # Bloc bonus N=100
+    assert "Bonus Mistral N=100" in content
+    # Quelques valeurs concretes pour eviter un format vide
+    assert "0.25" in content  # compliance full gemma
+    assert "0.55" in content  # compliance full mistral
 
 
 def test_render_metrics_md_hides_comparison_when_all_terrain_unknown(

@@ -57,3 +57,36 @@ def save_latency_distribution_png(
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
+
+
+def save_latency_comparison_png(
+    latencies_by_backend: dict[str, list[float]],
+    out_path: Path,
+    title: str = "Distribution latence par backend LLM",
+) -> None:
+    """Boxplot side-by-side : un backend par boite (slice 5 #75).
+
+    Met en evidence la difference d'ordre de grandeur Gemma3:4b CPU (~10^5 ms)
+    vs Mistral Small managed (~10^3 ms) sur les memes inputs. L'echelle est
+    log si le ratio max/min depasse 10 pour rester lisible.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    labels = list(latencies_by_backend.keys())
+    data = [latencies_by_backend[k] for k in labels]
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.boxplot(data, labels=labels, showfliers=True)
+    ax.set_ylabel("Latence (ms)")
+    ax.set_title(title)
+
+    flat = [v for series in data for v in series if v > 0]
+    if flat and (max(flat) / max(min(flat), 1e-9)) > 10:
+        ax.set_yscale("log")
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)

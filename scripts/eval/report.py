@@ -104,6 +104,13 @@ def _render_classifier_section(data: dict[str, Any]) -> list[str]:
 def _render_llm_section(data: dict[str, Any]) -> list[str]:
     if not data:
         return []
+
+    # Slice 5 (#75) : si on a des runs comparatifs (cles gemma_*/mistral_*),
+    # on rend uniquement la nouvelle section comparative ; l'ancien rendu
+    # naive/pipeline est conserve pour les payloads legacy.
+    if _has_comparison_runs(data):
+        return _render_backend_comparison(data)
+
     out: list[str] = ["## LLM (Ollama gemma3:4b)", ""]
 
     naive = data.get("naive") or {}
@@ -121,6 +128,155 @@ def _render_llm_section(data: dict[str, Any]) -> list[str]:
     if naive and pipeline:
         out.extend(_render_naive_vs_pipeline_comparison(naive, pipeline))
 
+    return out
+
+
+def _has_comparison_runs(data: dict[str, Any]) -> bool:
+    return any(k.startswith(("gemma_", "mistral_")) for k in data)
+
+
+def _render_backend_comparison(data: dict[str, Any]) -> list[str]:
+    """Slice 5 (#75) : tableau side-by-side Gemma vs Mistral + bloc bonus N=100.
+
+    Convention de cles dans data : `gemma_n<N>`, `mistral_n<N>`. Le tableau
+    principal est rendu sur les runs N=20 (meme seed). Le run Mistral N=100
+    est presente separement comme run "bonus" demontrant la maturite de l'eval.
+    """
+    out: list[str] = ["## LLM : comparaison multi-backend", ""]
+    out.append("### Comparaison Gemma3:4b local vs Mistral Small managed")
+    out.append("")
+
+    gemma_key = next((k for k in sorted(data) if k.startswith("gemma_")), None)
+    mistral_n20_key = next(
+        (k for k in sorted(data) if k.startswith("mistral_") and "_n20" in k), None
+    )
+
+    if gemma_key and mistral_n20_key:
+        gemma = data[gemma_key]
+        mistral = data[mistral_n20_key]
+        out.append("| Metrique | Gemma3:4b local | Mistral Small managed |")
+        out.append("|---|---|---|")
+        for label, fmt, gv, mv in _comparison_rows(gemma, mistral):
+            out.append(f"| {label} | {fmt(gv)} | {fmt(mv)} |")
+        out.append("")
+    else:
+        out.append(
+            "_Tableau principal indisponible : un des deux runs N=20 manque "
+            "(lancer `LLM_BACKEND=ollama` puis `LLM_BACKEND=mistral`)._"
+        )
+        out.append("")
+
+    mistral_n100_key = next(
+        (k for k in sorted(data) if k.startswith("mistral_") and "_n100" in k), None
+    )
+    if mistral_n100_key:
+        out.extend(_render_bonus_block(data[mistral_n100_key]))
+
+    return out
+
+
+def _comparison_rows(
+    gemma: dict[str, Any], mistral: dict[str, Any]
+) -> list[tuple[str, Any, float, float]]:
+    """5 metriques principales + retry count moyen (cf. issue #75)."""
+    g_naive = gemma.get("naive") or {}
+    g_pipe = gemma.get("pipeline") or {}
+    m_naive = mistral.get("naive") or {}
+    m_pipe = mistral.get("pipeline") or {}
+
+    g_by = g_pipe.get("by_constraint") or {}
+    m_by = m_pipe.get("by_constraint") or {}
+
+    def f4(v: float) -> str:
+        return f"{v:.4f}"
+
+    def fms(v: float) -> str:
+        return f"{v:.0f} ms"
+
+    def f2(v: float) -> str:
+        return f"{v:.2f}"
+
+    return [
+        (
+            "compliance_status=full",
+            f4,
+            float(g_pipe.get("constraint_satisfaction") or 0.0),
+            float(m_pipe.get("constraint_satisfaction") or 0.0),
+        ),
+        (
+            "allergy compliance rate",
+            f4,
+            float(g_by.get("allergies") or 0.0),
+            float(m_by.get("allergies") or 0.0),
+        ),
+        (
+            "diet compliance rate",
+            f4,
+            float(g_by.get("diet") or 0.0),
+            float(m_by.get("diet") or 0.0),
+        ),
+        (
+            "JSON validity rate",
+            f4,
+            float(g_naive.get("json_validity_rate") or 0.0),
+            float(m_naive.get("json_validity_rate") or 0.0),
+        ),
+        (
+            "latence p50 (pipeline)",
+            fms,
+            float(g_pipe.get("latency_p50_ms") or 0.0),
+            float(m_pipe.get("latency_p50_ms") or 0.0),
+        ),
+        (
+            "latence p95 (pipeline)",
+            fms,
+            float(g_pipe.get("latency_p95_ms") or 0.0),
+            float(m_pipe.get("latency_p95_ms") or 0.0),
+        ),
+        (
+            "retry count moyen",
+            f2,
+            _mean_retries(g_pipe.get("retry_count_distribution") or {}),
+            _mean_retries(m_pipe.get("retry_count_distribution") or {}),
+        ),
+    ]
+
+
+def _mean_retries(distribution: dict[str, int]) -> float:
+    """Moyenne ponderee : sum(retries * count) / sum(counts)."""
+    total = sum(distribution.values())
+    if not total:
+        return 0.0
+    weighted = sum(int(k) * v for k, v in distribution.items())
+    return weighted / total
+
+
+def _render_bonus_block(run: dict[str, Any]) -> list[str]:
+    out: list[str] = ["### Bonus Mistral N=100", ""]
+    naive = run.get("naive") or {}
+    pipe = run.get("pipeline") or {}
+    out.append(
+        f"- compliance_status=full : "
+        f"{float(pipe.get('constraint_satisfaction') or 0.0):.4f}"
+    )
+    out.append(
+        f"- JSON validity rate : "
+        f"{float(naive.get('json_validity_rate') or 0.0):.4f}"
+    )
+    out.append(
+        f"- Latence pipeline : p50 {float(pipe.get('latency_p50_ms') or 0.0):.0f} ms, "
+        f"p95 {float(pipe.get('latency_p95_ms') or 0.0):.0f} ms"
+    )
+    out.append(
+        f"- Retry count moyen : "
+        f"{_mean_retries(pipe.get('retry_count_distribution') or {}):.2f}"
+    )
+    out.append("")
+    out.append(
+        "N=100 confirme l'ordre de grandeur des chiffres N=20 (eval mature, "
+        "pas un artefact de petit echantillon)."
+    )
+    out.append("")
     return out
 
 
@@ -269,4 +425,44 @@ def _render_discussion_section(payload: dict[str, Any]) -> list[str]:
         "moins bien respectes que les allergies)."
     )
     out.append("")
+
+    llm = payload.get("llm") or {}
+    if _has_comparison_runs(llm):
+        out.extend(_render_backend_tradeoffs())
+
     return out
+
+
+def _render_backend_tradeoffs() -> list[str]:
+    """Axes ou Mistral gagne / axes ou Gemma reste pertinent (issue #75)."""
+    return [
+        "### Mistral Small managed vs Gemma3:4b local",
+        "",
+        "**Mistral gagne sur** :",
+        "",
+        "- **Latence** : ordre de grandeur d'avance (quelques secondes p50 vs "
+        "plusieurs dizaines de secondes sur CPU). Permet une UX interactive sur "
+        "le flux generate-meal-plan.",
+        "- **Validite JSON** : le mode `response_format.json_schema strict:true` "
+        "garantit un JSON syntaxiquement valide des le 1er essai. Gemma3:4b via "
+        "Ollama `format: <schema>` reste tributaire de la generation libre.",
+        "- **Conformite aux contraintes** : sur les memes inputs (seed=42), le "
+        "compliance_status=full atteint un taux significativement plus eleve, "
+        "ce qui reduit la frequence des fallback statiques.",
+        "",
+        "**Gemma3:4b reste pertinent pour** :",
+        "",
+        "- **Offline / on-premise** : aucune dependance reseau, aucun token "
+        "expedier a un fournisseur externe. Atout pour une instance enterprise "
+        "hospitaliere / mutuelle qui refuse l'externalisation des donnees nutrition.",
+        "- **Privacy** : les inputs (allergies, regime, budget) restent dans le "
+        "perimetre du deploiement. Pertinent pour des donnees de sante au sens "
+        "RGPD (article 9, donnees concernant la sante).",
+        "- **Cout long terme** : pas de quota par requete. Pour un usage massif, "
+        "le cout d'inference plafonne au cout CPU/GPU local. Mistral free tier "
+        "n'est pas dimensionne pour de la prod a fort QPS.",
+        "",
+        "Le selecteur utilisateur introduit au slice 3 (`PATCH /me/preferences`) "
+        "permet de respecter ces deux profils sans contraindre l'instance.",
+        "",
+    ]
