@@ -380,7 +380,8 @@ def _build_fallback_plan(
 ) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]]:
     """Construit un plan en mode degrade : matrice statique ou squelette vide.
 
-    Cas Ollama injoignable apres tous les retries flakiness. Le plan retourne
+    Cas LLM injoignable apres tous les retries flakiness (Slice 2 : la chain
+    Mistral <-> Ollama a aussi echoue sur chaque tentative). Le plan retourne
     porte status=static_fallback et un warning explicitant la cause.
     """
     raw: dict[str, Any] | None = None
@@ -392,7 +393,7 @@ def _build_fallback_plan(
     raw["fallback"] = True
 
     plan = FallbackMealPlan.model_validate(raw)
-    warnings = ["Ollama injoignable, plan statique de repli."]
+    warnings = ["LLM injoignable, plan statique de repli."]
     _persist_plan(
         db,
         plan,

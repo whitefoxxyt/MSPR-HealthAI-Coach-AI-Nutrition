@@ -27,6 +27,16 @@ class FallbackChain:
         schema: dict[str, Any] | None,
         primary_backend: str,
     ) -> tuple[str, str]:
+        if primary_backend not in self._providers:
+            # Misconfiguration typique : LLM_BACKEND=mistral mais MISTRAL_API_KEY
+            # vide -> build_default_chain n'a ajoute qu'Ollama. On preferera un
+            # ValueError explicite a un KeyError opaque cote orchestrator.
+            available = sorted(self._providers)
+            raise ValueError(
+                f"Backend primaire {primary_backend!r} indisponible dans le chain. "
+                f"Providers disponibles : {available}. "
+                f"Verifie LLM_BACKEND et MISTRAL_API_KEY."
+            )
         try:
             content = await self._providers[primary_backend].generate(prompt, schema)
             return content, primary_backend

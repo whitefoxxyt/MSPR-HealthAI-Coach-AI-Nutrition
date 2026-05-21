@@ -244,7 +244,7 @@ async def test_generate_plan_falls_back_after_max_attempts(
     assert plan.days[0].meals[0].name == "Plan de secours"
     assert fallback_calls == [("weight_loss", "")]
     assert status is ComplianceStatus.static_fallback
-    assert warnings  # warning explicitant Ollama injoignable
+    assert warnings  # warning explicitant LLM injoignable (chain Mistral/Ollama)
 
 
 @pytest.mark.asyncio
