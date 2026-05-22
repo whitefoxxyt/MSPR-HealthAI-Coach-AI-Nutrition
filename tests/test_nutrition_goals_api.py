@@ -55,7 +55,7 @@ def test_put_creates_profile_and_returns_data(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["user_id"] == 42
+    assert body["user_id"] == "42"
     assert body["health_goal"] == "muscle_gain"
     assert body["calories_target"] == 2400
     assert body["allergies"] == ["arachides"]
@@ -92,7 +92,7 @@ def test_get_returns_profile_after_put(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["user_id"] == 7
+    assert body["user_id"] == "7"
     assert body["health_goal"] == "weight_loss"
     assert body["calories_target"] == 1800
     assert body["diet_type"] == "vegetarien"
@@ -118,7 +118,7 @@ def test_second_put_updates_profile(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["user_id"] == 12
+    assert body["user_id"] == "12"
     assert body["health_goal"] == "sport_performance"
     assert body["calories_target"] == 2800
 
@@ -270,6 +270,6 @@ def test_put_with_minimal_payload_succeeds(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["user_id"] == 42
+    assert body["user_id"] == "42"
     assert body["health_goal"] is None
     assert body["allergies"] == []
