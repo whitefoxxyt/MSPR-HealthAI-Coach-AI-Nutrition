@@ -48,12 +48,13 @@ jobs:
           cache-dependency-path: |
             MSPR-AI-Nutrition/requirements.txt
             MSPR-AI-Nutrition/requirements-dev.txt
+            MSPR-AI-Nutrition/requirements-eval.txt
 
       - name: Install dependencies
         working-directory: MSPR-AI-Nutrition
         run: |
           pip install --extra-index-url https://download.pytorch.org/whl/cpu \
-            -r requirements.txt -r requirements-dev.txt
+            -r requirements.txt -r requirements-dev.txt -r requirements-eval.txt
 
       - name: Run pytest (excluding slow)
         working-directory: MSPR-AI-Nutrition
