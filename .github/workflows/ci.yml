@@ -1,8 +1,9 @@
-name: CI
+name: CI - AI-Nutrition
 
 on:
   push:
     branches: [master]
+    tags: ['v*.*.*']
   pull_request:
     branches: [master]
 
@@ -73,3 +74,13 @@ jobs:
         with:
           name: coverage-xml
           path: MSPR-AI-Nutrition/coverage.xml
+
+  publish:
+    name: Publication de l'image Docker
+    needs: [lint, test]
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/docker-publish.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
