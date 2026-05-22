@@ -13,7 +13,7 @@ from app.services.nutrition_engine import MealType
 def _full_goal(**overrides) -> NutritionGoal:
     """NutritionGoal avec biometrie complete (TDEE calculable)."""
     base = {
-        "user_id": 1,
+        "user_id": "1",
         "gender": "male",
         "age": 30,
         "weight_kg": 80.0,

@@ -179,7 +179,7 @@ def test_user_cannot_overwrite_another_users_profile(
         headers={"Authorization": f"Bearer {bob_token}"},
     )
     assert bob_put.status_code == 200
-    assert bob_put.json()["user_id"] == 200
+    assert bob_put.json()["user_id"] == "200"
 
     alice_get = client.get(
         "/api/v1/nutrition-goals/me",
@@ -219,7 +219,9 @@ def test_expired_jwt_returns_401(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_jwt_with_non_numeric_sub_returns_401(client: TestClient) -> None:
+def test_jwt_with_non_numeric_sub_is_accepted(client: TestClient) -> None:
+    # Depuis le refactor user_id en str (V14 + nanoID better-auth), un sub
+    # non numerique est un cas nominal. 404 = profil pas encore cree.
     now = datetime.now(tz=timezone.utc)
     token = jwt.encode(
         {
@@ -234,7 +236,7 @@ def test_jwt_with_non_numeric_sub_returns_401(client: TestClient) -> None:
         "/api/v1/nutrition-goals/me",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 401
+    assert response.status_code == 404
 
 
 def test_put_accepts_all_health_goal_values(
@@ -244,7 +246,7 @@ def test_put_accepts_all_health_goal_values(
     for idx, goal in enumerate(
         ["weight_loss", "muscle_gain", "balance", "sport_performance"]
     ):
-        token = valid_jwt(user_id="500" + idx)
+        token = valid_jwt(user_id=str(500 + idx))
         response = client.put(
             "/api/v1/nutrition-goals/me",
             json={"health_goal": goal},

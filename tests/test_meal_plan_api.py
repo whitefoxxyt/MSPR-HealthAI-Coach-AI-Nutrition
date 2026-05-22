@@ -353,7 +353,7 @@ def test_health_goal_falls_back_to_profile_when_request_null(
     assert "weight_loss" in sent_prompt
     # On verifie en BDD que l'objective persiste correspond au profil.
     objective = db_session.execute(
-        text("SELECT objective FROM meal_plans WHERE user_id = 500")
+        text("SELECT objective FROM meal_plans WHERE user_id = '500'")
     ).scalar()
     assert objective == "weight_loss"
 
@@ -383,7 +383,7 @@ def test_health_goal_defaults_to_balance_when_no_profile(
 
     assert response.status_code == 200, response.text
     objective = db_session.execute(
-        text("SELECT objective FROM meal_plans WHERE user_id = 501")
+        text("SELECT objective FROM meal_plans WHERE user_id = '501'")
     ).scalar()
     assert objective == "balance"
 
@@ -421,7 +421,7 @@ def test_explicit_health_goal_overrides_profile(
 
     assert response.status_code == 200, response.text
     objective = db_session.execute(
-        text("SELECT objective FROM meal_plans WHERE user_id = 502")
+        text("SELECT objective FROM meal_plans WHERE user_id = '502'")
     ).scalar()
     assert objective == "muscle_gain"
 
@@ -518,11 +518,11 @@ def test_successful_generation_persists_row_with_inputs_hash(
     row = db_session.execute(
         text(
             "SELECT id, user_id, inputs_hash, plan, objective "
-            "FROM meal_plans WHERE user_id = 800"
+            "FROM meal_plans WHERE user_id = '800'"
         )
     ).fetchone()
     assert row is not None
-    assert row.user_id == 800
+    assert row.user_id == "800"
     assert row.inputs_hash is not None
     # SHA256 hex = 64 caracteres.
     assert len(row.inputs_hash) == 64
@@ -553,7 +553,7 @@ def test_fallback_generation_also_persists_row(
 
     assert response.status_code == 200, response.text
     rows = db_session.execute(
-        text("SELECT id, inputs_hash, plan FROM meal_plans WHERE user_id = 801")
+        text("SELECT id, inputs_hash, plan FROM meal_plans WHERE user_id = '801'")
     ).fetchall()
     assert len(rows) == 1
     assert rows[0].inputs_hash is not None
@@ -580,17 +580,21 @@ def test_invalid_jwt_returns_401(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_jwt_with_non_numeric_sub_returns_401(
+def test_jwt_with_non_numeric_sub_is_accepted(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id="uuid-not-a-number")  # type: ignore[arg-type]
+    # Depuis le refactor user_id en str (V14 + nanoID better-auth), un sub
+    # non numerique est un cas nominal. On verifie que le router ne casse
+    # pas avant le LLM (sans environnement Mistral/Ollama dispo en test,
+    # on accepte 5xx au-dela de l'auth ; pas de 401).
+    token = valid_jwt(user_id="uuid-not-a-number")
     response = client.post(
         "/api/v1/generate-meal-plan",
         json={"diet_type": "omnivore"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 401
+    assert response.status_code != 401
 
 
 def test_invalid_diet_type_returns_422(
@@ -787,7 +791,7 @@ def test_compliance_persisted_to_meal_plans_table(
     row = db_session.execute(
         text(
             "SELECT compliance_status, compliance_warnings "
-            "FROM meal_plans WHERE user_id = 1003"
+            "FROM meal_plans WHERE user_id = '1003'"
         )
     ).fetchone()
     assert row is not None
@@ -832,7 +836,7 @@ def test_user_pref_ollama_persists_llm_backend_used_ollama(
 
     assert response.status_code == 200, response.text
     row = db_session.execute(
-        text("SELECT llm_backend_used FROM meal_plans WHERE user_id = 1100")
+        text("SELECT llm_backend_used FROM meal_plans WHERE user_id = '1100'")
     ).fetchone()
     assert row is not None
     assert row.llm_backend_used == "ollama"
@@ -888,7 +892,7 @@ def test_user_pref_switch_invalidates_cache_and_regenerates(
     # 2 lignes meal_plans : une par backend, hash identique mais backend distinct.
     rows = db_session.execute(
         text(
-            "SELECT llm_backend_used FROM meal_plans WHERE user_id = 1101 "
+            "SELECT llm_backend_used FROM meal_plans WHERE user_id = '1101' "
             "ORDER BY generated_at"
         )
     ).fetchall()
@@ -941,7 +945,7 @@ def test_generate_meal_plan_falls_back_to_ollama_when_mistral_unavailable(
     ), f"compliance_warnings={body['compliance_warnings']!r}"
 
     row = db_session.execute(
-        text("SELECT compliance_warnings FROM meal_plans WHERE user_id = 1004")
+        text("SELECT compliance_warnings FROM meal_plans WHERE user_id = '1004'")
     ).fetchone()
     assert row is not None
     assert any("Mistral indisponible" in w for w in row.compliance_warnings)

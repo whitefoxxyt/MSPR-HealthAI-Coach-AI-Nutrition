@@ -58,7 +58,7 @@ def test_update_preferences_creates_profile_when_none_exists(
     assert view.effective_llm == "ollama"
     # La ligne nutrition_goals est creee meme si seule la preference est definie.
     row = db_session.execute(
-        text("SELECT preferred_llm FROM nutrition_goals WHERE user_id = 3")
+        text("SELECT preferred_llm FROM nutrition_goals WHERE user_id = '3'")
     ).fetchone()
     assert row is not None
     assert row.preferred_llm == "ollama"
@@ -92,6 +92,6 @@ def test_update_preferences_with_none_resets_to_env_default(
     assert view.preferred_llm is None
     assert view.effective_llm == "mistral"
     row = db_session.execute(
-        text("SELECT preferred_llm FROM nutrition_goals WHERE user_id = 5")
+        text("SELECT preferred_llm FROM nutrition_goals WHERE user_id = '5'")
     ).fetchone()
     assert row.preferred_llm is None

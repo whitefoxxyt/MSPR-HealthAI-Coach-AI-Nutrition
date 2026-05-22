@@ -102,7 +102,7 @@ def test_patch_preferences_with_null_resets_to_default(
     assert reset.status_code == 200
     assert reset.json() == {"preferred_llm": None, "effective_llm": "mistral"}
     row = db_session.execute(
-        text("SELECT preferred_llm FROM nutrition_goals WHERE user_id = 45")
+        text("SELECT preferred_llm FROM nutrition_goals WHERE user_id = '45'")
     ).fetchone()
     assert row.preferred_llm is None
 

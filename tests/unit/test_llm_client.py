@@ -130,11 +130,11 @@ async def test_generate_plan_persists_with_inputs_hash(
 
     row = db_session.execute(
         text("SELECT user_id, inputs_hash, plan FROM meal_plans WHERE user_id = :uid"),
-        {"uid": 42},
+        {"uid": "42"},
     ).fetchone()
     assert row is not None
     assert row.inputs_hash == compute_inputs_hash(inputs)
-    assert row.user_id == 42
+    assert row.user_id == "42"
     assert row.plan["days"][0]["meals"][0]["macros"]["calories"] == 1800
 
 
@@ -294,7 +294,7 @@ async def test_generate_plan_returns_cached_without_calling_ollama(
             "VALUES (:uid, CAST(:plan AS JSONB), :obj, :h, NOW())"
         ),
         {
-            "uid": 30,
+            "uid": "30",
             "plan": json.dumps(cached),
             "obj": "balance",
             "h": compute_inputs_hash(inputs),
@@ -324,7 +324,7 @@ async def test_generate_plan_ignores_cache_older_than_seven_days(
             "VALUES (:uid, CAST(:plan AS JSONB), :obj, :h, NOW() - INTERVAL '8 days')"
         ),
         {
-            "uid": 31,
+            "uid": "31",
             "plan": json.dumps(stale),
             "obj": "balance",
             "h": compute_inputs_hash(inputs),
@@ -354,7 +354,7 @@ async def test_generate_plan_bypass_cache_calls_ollama_even_with_hit(
             "VALUES (:uid, CAST(:plan AS JSONB), :obj, :h, NOW())"
         ),
         {
-            "uid": 32,
+            "uid": "32",
             "plan": json.dumps(cached),
             "obj": "balance",
             "h": compute_inputs_hash(inputs),
@@ -515,7 +515,7 @@ async def test_generate_plan_semaphore_limits_concurrent_ollama_calls(
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(side_effect=slow_handler)
 
     inputs_list = [
-        PlanInputs(user_id="50" + i, objective="balance", duration_days=1)
+        PlanInputs(user_id=str(50 + i), objective="balance", duration_days=1)
         for i in range(4)
     ]
     results = await asyncio.gather(
