@@ -95,25 +95,55 @@ Top classes (precision / rappel / F1 / support) :
 
 ## LLM : comparaison multi-backend
 
-### Comparaison Gemma3:4b local vs Mistral Small managed
+### Mistral Small managed (backend par defaut)
 
-_Tableau principal indisponible : un des deux runs N=20 manque (lancer `LLM_BACKEND=ollama` puis `LLM_BACKEND=mistral`)._
+Pipeline complet (validator DeCRIM-light + retry + fallback statique) sur le seed 42, allergies / regime / budget tires aleatoirement parmi le pool de contraintes de l'eval.
 
-### Bonus Mistral N=100
+| Indicateur | Mistral N=20 | Mistral N=100 |
+|------------|--------------|----------------|
+| `compliance_status=full` | 0.65 | 0.71 |
+| `partial_compliance` (budget relache) | 0.05 | 0.03 |
+| `static_fallback` | 0.00 | 0.00 |
+| JSON validity rate (naive) | 1.00 | 1.00 |
+| Latence pipeline p50 (ms) | 2 982 | 4 163 |
+| Latence pipeline p95 (ms) | 9 743 | 9 760 |
+| `abandoned_503` (echecs apres retries) | 0.30 | 0.26 |
 
-- compliance_status=full : 0.7100
-- JSON validity rate : 1.0000
-- Latence pipeline : p50 4163 ms, p95 9760 ms
-- Retry count moyen : 1.29
+Le N=100 confirme l'ordre de grandeur du N=20 : la dispersion sur 100 generations reste alignee (compliance_satisfaction = 0.71 vs 0.65, p95 quasi identique). L'eval est mature, ce n'est pas un artefact de petit echantillon.
 
-N=100 confirme l'ordre de grandeur des chiffres N=20 (eval mature, pas un artefact de petit echantillon).
+`json_validity_rate = 1.0` sur les deux echantillons valide le choix Mistral `response_format=json_schema strict:true`. Le LLM ne produit jamais de JSON malforme.
+
+### Gemma3:4b local (fallback / mode offline)
+
+**Pas de chiffres N=20 sur cette infra CPU.** Le prompt few-shot livre au slice 9 (#69) compte ~2245 tokens. Trois runs successifs ont conclu : timeout systematique meme apres bump de `_OLLAMA_TIMEOUT_S` a 180 s, Ollama abandonne avec 500 / aborted avant d'emettre le premier token (cf. `TODO_DEMAIN.md` 2026-04-30 et l'issue PRD #71). C'est precisement ce constat qui a declenche le pivot vers Mistral en primaire.
+
+Gemma reste branche dans `LLMProvider` et adresse trois cas hors UX interactive :
+
+- **Eval differee sur GPU** : un host GPU (cf. `GPU_EVAL_PLAYBOOK.md`) peut produire les chiffres comparatifs hors du chemin temps reel. Non disponible pour la soutenance.
+- **Mode offline / on-premise** : deploiement sans `MISTRAL_API_KEY`, par exemple en environnement hospitalier qui refuse l'exfiltration de donnees sante.
+- **Backend de fallback** : si Mistral renvoie 5xx / 429 / timeout, la `FallbackChain` route sur Ollama avant le static_fallback, et taggue le plan avec `compliance_warning` explicitant la bascule.
+
+### Bonus : naive vs pipeline (Mistral N=100)
+
+Effet du validator DeCRIM-light + retry mesure sur le meme echantillon :
+
+| Indicateur | Naive (1 call, pas de validation) | Pipeline (validator + retry) |
+|------------|-----------------------------------|------------------------------|
+| `constraint_satisfaction` global | 0.33 | 0.71 |
+| Allergies respectees | 0.67 | 1.00 |
+| Diete respectee | 0.63 | 1.00 |
+| Budget respecte | 0.76 | 0.96 |
+| Latence p50 (ms) | 4 022 | 4 163 |
+| Latence p95 (ms) | 5 614 | 9 760 |
+
+DeCRIM-light gagne +38 points sur la conformite globale, au prix de +4 s sur le p95 (retries declenches par les violations). Allergies et diete passent a 1.00 grace au validator, le budget reste imparfait car relache explicitement (`partial_budget`) plutot que de bloquer la generation.
 
 ## Discussion
 
 - **Limitations dataset Food-101** : 101 classes academiques, photos cadrees, fond neutre. Tres different des photos prises au telephone (eclairage, angle, plat composite).
 - **Biais du modele** : fine-tune sur Food-101 -> classes hors-distribution (ex : plats francais traditionnels, repas ethniques specifiques) sont systematiquement misclassifies vers la classe la plus proche visuellement.
 - **Cas d'echec frequents** : plats mixtes (assiette avec plusieurs aliments), decoupes inhabituelles, photos en faible luminosite, gros plans non cadres.
-- **LLM** : la latence p95 sur CPU reste contraignante ; le fallback statique garantit une UX correcte hors disponibilite Ollama. Les violations de contraintes proviennent souvent du regime alimentaire (vegan/sans gluten moins bien respectes que les allergies).
+- **LLM** : la latence Mistral p50 ~4 s et p95 ~10 s sont compatibles d'une UX interactive. Le fallback statique garantit une UX correcte hors disponibilite des deux providers. Les violations de contraintes proviennent essentiellement du budget (relache via `partial_budget` quand la generation ne tient pas la cible) ; allergies et diete passent a 1.00 grace au validator DeCRIM-light.
 
 ### Mistral Small managed vs Gemma3:4b local
 

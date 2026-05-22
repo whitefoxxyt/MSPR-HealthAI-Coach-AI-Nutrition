@@ -12,6 +12,7 @@ Le service `MSPR-AI-Nutrition` partage la base PostgreSQL `healthai` avec le res
 | V9 | `V9__ai_nutrition_enrichment.sql` | Ajout `nutrition_goals.health_goal` (CHECK), `meal_plans.inputs_hash`, `meal_analyses.recommendations`. |
 | V10 | `V10__meal_analyses_recommendations_hash.sql` | Ajout `meal_analyses.recommendations_hash` + index. |
 | V11 | `V11__ai_nutrition_v11.sql` | Ajout `meal_analyses.imbalances`, `meal_analyses.serving_sizes`, `meal_analyses.meal_type`, `meal_plans.compliance_status` (NOT NULL DEFAULT `'full'`), `meal_plans.compliance_warnings`. |
+| V13 | `V13__llm_backend_selection.sql` | Ajout `nutrition_goals.preferred_llm` (CHECK in `('ollama', 'mistral')`, NULL = utiliser le defaut env) et `meal_plans.llm_backend_used` (NOT NULL DEFAULT `'ollama'`, CHECK in `('ollama', 'mistral')`). Sert au selecteur utilisateur et a l'audit / cache par backend. |
 
 ## Tables ajoutees
 
@@ -53,6 +54,7 @@ Plans repas generes par LLM (endpoint `POST /api/v1/generate-meal-plan`).
 | `inputs_hash` | `VARCHAR(64)` | SHA256 hex de `constraints` + user_id, cle de cache (TTL 7 jours). |
 | `compliance_status` | `TEXT NOT NULL DEFAULT 'full'` | (V11) Sortie de la boucle DeCRIM-light : `full`, `partial_budget` ou `static_fallback`. Default `full` pour la retro-compatibilite des lignes pre-V11. |
 | `compliance_warnings` | `TEXT[]` | (V11) Strings explicitant les relachements de contraintes (ex. budget depasse). NULL ou tableau vide quand `compliance_status = 'full'`. |
+| `llm_backend_used` | `VARCHAR(20) NOT NULL DEFAULT 'ollama'` | (V13) Backend qui a effectivement genere le plan (`ollama` ou `mistral`). Trace d'audit + cle de cache pour eviter un hit cross-backend. |
 | `generated_at` | `TIMESTAMP` | Date de generation. |
 
 Indexes :
@@ -72,6 +74,7 @@ Profil nutritionnel de l'utilisateur (endpoints `GET` / `PUT /api/v1/nutrition-g
 | `allergies` | `TEXT[]` | Liste declarative. |
 | `diet_type` | `VARCHAR(50)` | `omnivore`, `vegetarien`, `vegan`, `sans_gluten` (validation cote app via Pydantic). |
 | `health_goal` | `VARCHAR(30)` | CHECK in `('weight_loss', 'muscle_gain', 'balance', 'sport_performance')`. NULL = `balance` par defaut. |
+| `preferred_llm` | `VARCHAR(20)` | (V13) Preference utilisateur du backend LLM. CHECK in `('ollama', 'mistral')`. NULL = utiliser le defaut env (`DEFAULT_LLM`). |
 
 ## Choix d'architecture
 
@@ -114,6 +117,20 @@ Les 3 tables coexistent dans le schema `public` avec les tables ETL existantes (
 
 `detected_foods`, `macros`, `plan`, `constraints`, ainsi que les champs V11 `imbalances` et `serving_sizes`, sont des structures dont le schema peut evoluer (ajout de nouveaux champs au gre des iterations LLM ou des extensions du modele). `JSONB` permet ces evolutions sans migration. Tradeoff connu : pas de validation SQL des sous-structures, c'est Pydantic cote application qui assure le contrat.
 
+### Selection multi-provider du LLM (V13)
+
+V13 introduit le selecteur de backend LLM, livre par le PRD #71 (architecture multi-provider Mistral + Ollama). Deux colonnes complementaires :
+
+- **`nutrition_goals.preferred_llm`** : preference utilisateur. NULL signifie "pas d'override, utiliser le defaut env" (`settings.default_llm`, defaut `mistral`). Le `CHECK` SQL borne les valeurs aux deux providers livres ; ajouter Anthropic ou OpenAI plus tard demandera une migration `ALTER TABLE ... DROP CONSTRAINT` puis re-creation, c'est assume.
+- **`meal_plans.llm_backend_used`** : trace du backend qui a reellement repondu (peut differer de la preference si la `FallbackChain` a bascule vers le secondaire suite a un echec primaire). `NOT NULL DEFAULT 'ollama'` pour les lignes pre-V13 ecrites par l'orchestrator Ollama-only.
+
+Deux usages :
+
+- **Audit / segmentation qualite** : permet de filtrer les `meal_plans` par backend lors d'analyses a posteriori (cf. eval comparative `docs/metrics.md`). Sans cette colonne, on melangerait les chiffres Mistral et Gemma.
+- **Cache par backend** : `_lookup_cached_plan` filtre desormais `WHERE inputs_hash = :hash AND llm_backend_used = :backend`. Sans ce filtre, un utilisateur qui bascule de Mistral vers Ollama recupererait un plan Mistral persiste pour un input identique, ce qui contredit son choix.
+
+La resolution finale du backend est calculee par `get_preferences(user_id, db).effective_llm` dans `app/services/user_preferences_service.py` selon la chaine : `nutrition_goals.preferred_llm` -> `settings.default_llm` -> constante `"mistral"`.
+
 ### TEXT plutot qu'ENUM pour les statuts
 
 `meal_plans.compliance_status` (V11 : `full` / `partial_budget` / `static_fallback`) et `meal_analyses.meal_type` (V11 : `breakfast` / `lunch` / `dinner` / `snack`) sont declares en `TEXT` plutot qu'en `CREATE TYPE ... AS ENUM`. Trois raisons :
@@ -128,9 +145,10 @@ Les 3 tables coexistent dans le schema `public` avec les tables ETL existantes (
 |----------|-----------------|
 | `POST /api/v1/analyze-meal` | Lit `nutrition_entries` (lookup), `nutrition_goals` (profil). Ecrit `meal_analyses`. Lit/ecrit `meal_analyses` pour le cache de recommandations. |
 | `GET /api/v1/meal-analyses/me` | Lit `meal_analyses` (filtre `user_id`, tri `created_at DESC`, pagination). |
-| `POST /api/v1/generate-meal-plan` | Lit `nutrition_goals` (profil). Lit/ecrit `meal_plans` pour le cache (filtre `user_id` + `inputs_hash`, TTL 7j). |
+| `POST /api/v1/generate-meal-plan` | Lit `nutrition_goals` (profil + `preferred_llm`). Lit/ecrit `meal_plans` pour le cache (filtre `user_id` + `inputs_hash` + `llm_backend_used`, TTL 7j). Ecrit `llm_backend_used` avec le backend reellement utilise par la `FallbackChain`. |
 | `GET /api/v1/meal-plans/me` | Lit `meal_plans` (filtre `user_id`, tri `generated_at DESC`, pagination). |
 | `GET` / `PUT /api/v1/nutrition-goals/me` | Lit / upsert `nutrition_goals`. |
+| `GET` / `PATCH /api/v1/me/preferences` | Lit / upsert `nutrition_goals.preferred_llm`. Endpoint dedie au selecteur multi-provider. |
 
 ## Schema applicatif
 

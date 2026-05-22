@@ -8,62 +8,60 @@ Instructions ciblées pour Claude Code sur ce repo. Le `CLAUDE.md` racine de `MS
 
 Microservice FastAPI d'analyse nutritionnelle par IA, expose sur le port `8001`. Deux flux :
 
-1. **Classification d'aliments depuis photo** (HuggingFace `nateraw/food`, modele Food-101) → macros + recommandations.
-2. **Generation de plans repas** (Ollama / `gemma3:4b`) — *non implemente, phase 4 du `PLAN.md`*.
+1. **Classification d'aliments depuis photo** (HuggingFace `nateraw/food`, modele Food-101) : macros + recommandations + serving_sizes PNNS.
+2. **Generation de plans repas** : architecture LLM multi-provider livree par PRD #71. Mistral Small managed en primaire, Ollama Gemma3:4b en fallback / mode offline. Validator DeCRIM-light + retry + fallback statique. Selecteur utilisateur via `PATCH /me/preferences`.
 
 Persistance dans la BDD partagee `healthai` (PostgreSQL 17, MSPR-DB). Pas de BDD propre.
 
 ---
 
-## Avancement (au 2026-04-28)
+## Avancement (au 2026-05-22)
 
-Le `PLAN.md` (untracked) decrit 6 phases. Etat reel :
+PRD #45 (squelette + analyse + plans) et PRD #71 (multi-provider Mistral + Ollama + selecteur user) cloturees. Tous les livrables PDF MSPR2 (#5 API IA, #6 OpenAPI, #8 modele de donnees, #9 tests / couverture, #1 metriques) sont en place.
 
-| Phase | Statut | Commits |
-|-------|--------|---------|
-| 1. Squelette + healthcheck | OK | #1, #2, #3 |
-| 2. Modeles SQLAlchemy + schemas Pydantic | OK cote code, **PAS cote BDD** (voir piege ci-dessous) | #5 |
-| 3. `POST /analyze-meal` (HuggingFace) | OK, 2 rounds de bugfix | #6, #7, #8 |
-| 4. `POST /generate-meal-plan` (Ollama) | A faire | — |
-| 5. `GET /meal-plans/{user_id}`, `GET /meal-analyses/{user_id}` | A faire | — |
-| 6. Tests + doc | A faire | — |
+| Item | Statut | Reference |
+|------|--------|-----------|
+| Squelette + healthcheck + `/analyze-meal` + `/generate-meal-plan` | OK | PRD #45 (PR #62, #67, #68, #70) |
+| Pipeline DeCRIM-light + few-shot | OK | Slices 6 / 9 (PR #64, #69) |
+| Migrations V8 -> V13 (BDD live a jour) | OK | `MSPR-DB/migrations/V8` ... `V13` |
+| Tests pytest + couverture lignes 95.96 % / branches 84.58 % | OK | Slice 10 (PR #70) |
+| Documentation OpenAPI nettoyee | OK | Slice 10 (PR #70) |
+| Eval classifier Food-101 (top-1 0.888, top-5 0.972) | OK | `docs/metrics.md` |
+| Eval LLM Mistral N=20 + N=100 (json_validity 1.0, p50 ~4 s) | OK | `docs/metrics.md` |
+| Selecteur multi-provider + endpoint `/me/preferences` (V13) | OK | PRD #71 Slice 3 (commit `fc21fa0`) |
+| FallbackChain inter-providers Mistral <-> Ollama | OK | PRD #71 Slice 2 (PR #73) |
+| Doc pivot Mistral + narration soutenance | OK | PRD #71 Slice 6 (issue #77, ce commit) |
 
 ---
 
-## Pieges connus — a verifier avant tout changement
+## Etat post-pivot Mistral : ce qu'il faut connaitre
 
-Ces ecarts entre le code et l'infra reelle sont importants. Claude doit les connaitre pour ne pas proposer de fix qui aggraveraient la situation.
+Les 3 pieges historiques (FK `users`, filtre `user_id IS NULL`, `spring_client.get_user_me`) sont resolus. Le repo est dans un etat coherent. Quelques points qui restent contre-intuitifs :
 
-### 1. La table `users` n'existe plus (MSPR-DB V7)
+### 1. Gemma3:4b ne tient pas le prompt few-shot sur cette infra CPU
 
-`app/db/models.py` declare `ForeignKey("users.id", ondelete="CASCADE")` sur `MealAnalysis.user_id`, `MealPlan.user_id`, `NutritionGoal.user_id`. La table `users` a ete droppee dans `MSPR-DB/migrations/V7__drop_users_table.sql`. Ces FK pointent dans le vide ; toute migration creee a partir de ces modeles echouera.
+Le prompt avec 3 exemples few-shot pese ~2245 tokens. Ollama / Gemma3:4b en mode CPU pur (`torch==2.7.0+cpu`) renvoie 500 / aborted apres 180 s sans emettre le premier token. C'est ce constat qui a declenche le pivot vers Mistral. Ne pas relancer une eval LLM Gemma sur cette infra : prevoir un host GPU (cf. `GPU_EVAL_PLAYBOOK.md` et `docker-compose.gpu-eval.yml`). Pour le code, Gemma reste branche dans `LLMProvider` et adresse les chemins fallback + offline.
 
-**A faire avant la phase 4** : ecrire les migrations `meal_analyses`, `meal_plans`, `nutrition_goals` dans `MSPR-DB` **sans** la FK vers `users`. Le `user_id` reste un `BIGINT` mais devient un identifiant opaque venant du JWT (service AUTH).
+### 2. `meal_plans.llm_backend_used` n'est pas le primaire demande
 
-### 2. `nutrition_lookup.py` filtre sur une colonne supprimee
+La `FallbackChain` peut basculer du primaire (Mistral) vers le secondaire (Ollama) en cas d'echec reseau / quota. Dans ce cas, la ligne persistee porte le backend reellement utilise et un `compliance_warning` explicitant la bascule. Le helper `_latest_plan_id` dans `meal_plan_orchestrator.py` ne filtre donc pas par backend, contrairement a `_lookup_cached_plan` qui filtre par `(user_id, inputs_hash, llm_backend_used)` pour eviter un cache hit cross-backend apres un switch user.
 
-La requete contient `WHERE user_id IS NULL` mais la colonne `user_id` de `nutrition_entries` a ete droppee (V7 toujours). Le filtre n'echoue pas en runtime parce que SQLAlchemy ne valide pas le SQL en `text()`, mais la requete renverra une erreur PostgreSQL des qu'elle sera executee contre la BDD a jour. Retirer `user_id IS NULL AND` des deux requetes du fichier.
+### 3. Cle Mistral via `MISTRAL_API_KEY`
 
-### 3. `spring_client.get_user_me` appelle un endpoint supprime
+Renomme depuis l'historique `CLE_MISTRAL` (convention anglaise comme le reste du repo). Lue depuis `.env`, jamais commitee. En son absence, le `MistralProvider` est instancie en mode degrade : tout appel leve `ValueError` avant le HTTP. La factory bascule alors automatiquement sur Ollama si la preference user / le defaut env vaut `mistral`.
 
-`GET /api/users/me` n'existe plus sur la branche `Sonar` de MSPR-API (`UserController` purge, auth deleguee a MSPR-AUTH). Le router `meal_analysis` casse en prod des qu'il essaie de recuperer le profil. Deux options :
-- recuperer `user_id` directement depuis le JWT (decoder localement avec `BETTER_AUTH_SECRET`),
-- ou appeler MSPR-AUTH (`GET /api/session`) plutot que MSPR-API.
+### 4. `PLAN.md` et `TODO_DEMAIN.md` restent untracked
 
-Pour l'instant les objectifs nutritionnels (`NutritionGoal`) viennent de la BDD locale, pas du profil Spring — donc l'appel Spring ne sert qu'a recuperer `user_id`. Migrer vers du JWT decode local est plus simple.
-
-### 4. `PLAN.md` n'est pas commite
-
-Untracked depuis le debut. A commiter quand la prochaine phase est attaquee, pas avant (Arthur le retravaille ponctuellement).
+Fichiers de travail d'Arthur, retravailles ponctuellement entre sessions. Ne pas les commiter, ne pas les reecrire de fond. Voir aussi la regle globale : ne pas reformuler les textes d'Arthur, prefere supprimer ou pointer le passage problematique.
 
 ---
 
 ## Stack & conventions
 
 - **Python 3.12**, FastAPI 0.115, SQLAlchemy 2.0 (style `DeclarativeBase`), Pydantic v2 (`pydantic-settings`).
-- **Inference CPU uniquement** : `torch==2.7.0+cpu` via l'index PyTorch CPU. Ne pas ajouter de deps GPU.
+- **Inference CPU uniquement** : `torch==2.7.0+cpu` via l'index PyTorch CPU. Ne pas ajouter de deps GPU. Eval GPU = host externe via `GPU_EVAL_PLAYBOOK.md`.
 - **HuggingFace** : modele `nateraw/food` charge en lazy singleton (`_classifier` global dans `food_classifier.py`). Choix valide par benchmark (`docs/model_benchmark.md`, `docs/benchmark_results.json`).
-- **Ollama** : container separe dans le `docker-compose.yml` du repo, reseau `internal`. Pull automatique de `gemma3:4b` au demarrage.
+- **LLM multi-provider** : `MistralProvider` (primaire, `mistral-small-latest`, `response_format=json_schema strict:true`) + `OllamaProvider` (fallback, `gemma3:4b`). Selection via `get_preferences(user_id, db).effective_llm`. Factory `get_provider(name)` dans `app/services/llm_provider.py`.
 - **Reseaux Docker** : `mspr_data_network` (external, cree par le compose racine) + `internal` (Ollama).
 - **Imports** : `from __future__ import annotations` en tete des fichiers Python.
 - **Strings** : guillemets doubles partout (style transformers/FastAPI).
@@ -110,12 +108,10 @@ Pas de `pytest` configure pour l'instant (phase 6).
 
 ---
 
-## Avant la phase 4 (Ollama / generate-meal-plan)
+## References documentaires
 
-Checklist a derouler dans cet ordre :
-
-1. Resoudre les 3 pieges ci-dessus (sinon la phase 4 hereitera des memes problemes).
-2. Ecrire la migration MSPR-DB `V8__ai_nutrition_tables.sql` pour `meal_analyses`, `meal_plans`, `nutrition_goals` (sans FK vers `users`).
-3. Decider du flux JWT → `user_id` (decode local recommande).
-4. Ajouter `services/meal_plan_generator.py` : prompt structure → Ollama HTTP `/api/generate` avec `format: "json"` → validation Pydantic du JSON.
-5. Persister dans `meal_plans`, retourner le plan.
+- `docs/metrics.md` : chiffres classifier Food-101 + LLM Mistral N=20 / N=100 + comparaison naive vs pipeline.
+- `docs/data_model.md` : tables AI-Nutrition + decisions architecturales (pas de FK users, hashes cache, selection multi-provider V13).
+- `docs/pivot_mistral.md` : justification du pivot Mistral et architecture multi-provider (narration soutenance).
+- `GPU_EVAL_PLAYBOOK.md` + `docker-compose.gpu-eval.yml` : relance eval LLM Gemma sur host GPU externe.
+- `TODO_DEMAIN.md` : etat / decisions en attente entre sessions (untracked).
