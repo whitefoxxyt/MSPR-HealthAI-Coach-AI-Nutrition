@@ -16,7 +16,7 @@ from tests.conftest import TEST_AUTH_SECRET
 
 def _seed_analysis(
     db: Session,
-    user_id: int,
+    user_id: str,
     *,
     foods: list | None = None,
     macros: dict | None = None,
@@ -74,7 +74,7 @@ def test_returns_only_analyses_of_authenticated_user(
     db_session: Session,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_a, user_b = 100, 200
+    user_a, user_b = "100", "200"
     for _ in range(5):
         _seed_analysis(db_session, user_a)
     for _ in range(3):

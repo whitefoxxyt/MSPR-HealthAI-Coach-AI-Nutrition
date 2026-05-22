@@ -56,7 +56,7 @@ def _seed_pizza(db: Session) -> None:
 
 def _seed_full_profile(
     db: Session,
-    user_id: int,
+    user_id: str,
     *,
     health_goal: str | None = "balance",
     gender: str = "male",
@@ -85,7 +85,7 @@ def _seed_full_profile(
     db.commit()
 
 
-def _seed_partial_profile(db: Session, user_id: int) -> None:
+def _seed_partial_profile(db: Session, user_id: str) -> None:
     """Profil sans biometrie : detect() doit retourner [] (profile_completion_required)."""
     db.execute(
         text("INSERT INTO nutrition_goals (user_id, health_goal) VALUES (:uid, :goal)"),

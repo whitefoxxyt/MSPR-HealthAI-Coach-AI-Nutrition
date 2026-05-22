@@ -16,7 +16,7 @@ from tests.conftest import TEST_AUTH_SECRET
 
 def _seed_plan(
     db: Session,
-    user_id: int,
+    user_id: str,
     *,
     plan: dict | None = None,
     objective: str | None = "weight_loss",
@@ -76,7 +76,7 @@ def test_returns_only_plans_of_authenticated_user(
     db_session: Session,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_a, user_b = 100, 200
+    user_a, user_b = "100", "200"
     for i in range(5):
         _seed_plan(db_session, user_a, inputs_hash=f"a-{i}")
     for i in range(3):
