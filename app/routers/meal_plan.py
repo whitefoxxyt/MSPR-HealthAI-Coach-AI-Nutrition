@@ -136,7 +136,7 @@ _PLAN_RESPONSE_EXAMPLE = {
         },
     ),
 )
-@limiter.limit("10/hour;3/minute")
+@limiter.limit("30/hour;10/minute")
 async def generate_meal_plan(
     request: Request,  # requis par SlowAPI pour key_func
     payload: MealPlanRequest = Body(..., openapi_examples=_PLAN_REQUEST_EXAMPLES),
