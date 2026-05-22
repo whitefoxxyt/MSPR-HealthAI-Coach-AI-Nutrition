@@ -17,7 +17,7 @@ from testcontainers.postgres import PostgresContainer
 
 MIGRATIONS_DIR = Path(os.environ.get("MIGRATIONS_DIR", "/migrations"))
 MIGRATION_PATTERN = re.compile(r"^V(\d+)__.*\.sql$")
-MAX_MIGRATION_VERSION = 13  # V12 (biometrie) + V13 (PRD #71 slice 3, llm_backend_used + preferred_llm)
+MAX_MIGRATION_VERSION = 14  # V13 (llm_backend) + V14 (user_id BIGINT -> VARCHAR(64) pour nanoID better-auth)
 
 TEST_AUTH_SECRET = "test-secret-not-for-prod-do-not-use"
 TEST_OLLAMA_HOST = "http://ollama-test:11434"
