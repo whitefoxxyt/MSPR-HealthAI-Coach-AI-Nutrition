@@ -101,7 +101,7 @@ def test_analyze_meal_nominal_returns_imbalance_tags_and_single_recommendation(
     mock_ollama: respx.MockRouter,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 42
+    user_id = "42"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id)
 
@@ -156,7 +156,7 @@ def test_analyze_meal_persists_imbalances_jsonb(
     mock_ollama: respx.MockRouter,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 99
+    user_id = "99"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id)
 
@@ -188,7 +188,7 @@ def test_analyze_meal_returns_completion_required_when_profile_incomplete(
     mock_ollama: respx.MockRouter,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 50
+    user_id = "50"
     _seed_pizza(db_session)
     _seed_partial_profile(db_session, user_id)  # pas de biometrie
 
@@ -227,7 +227,7 @@ def test_analyze_meal_returns_completion_required_when_no_profile(
     mock_ollama: respx.MockRouter,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 51
+    user_id = "51"
     _seed_pizza(db_session)
     # Pas de profil du tout : aucune ligne en BDD.
 
@@ -251,7 +251,7 @@ def test_analyze_meal_falls_back_to_matrix_when_llm_down(
     mock_ollama: respx.MockRouter,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 43
+    user_id = "43"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id, health_goal="weight_loss")
 
@@ -287,7 +287,7 @@ def test_analyze_meal_cache_hit_skips_llm_on_second_call(
     mock_ollama: respx.MockRouter,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 44
+    user_id = "44"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id, health_goal="balance")
 
@@ -321,7 +321,7 @@ def test_analyze_meal_uses_balance_when_health_goal_missing(
     mock_ollama: respx.MockRouter,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 45
+    user_id = "45"
     _seed_pizza(db_session)
     # Profil avec biometrie complete mais health_goal NULL.
     _seed_full_profile(db_session, user_id, health_goal=None)
@@ -379,7 +379,7 @@ def test_analyze_meal_returns_serving_sizes_per_detected_food(
     valid_jwt: Callable[..., str],
 ) -> None:
     """Reponse contient serving_sizes : 1 liste de 3 portions par aliment detecte."""
-    user_id = 60
+    user_id = "60"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id)
     _patch_classifier(monkeypatch, [("pizza", 0.85), ("steak", 0.55)])
@@ -417,7 +417,7 @@ def test_analyze_meal_warns_when_meal_type_missing(
     valid_jwt: Callable[..., str],
 ) -> None:
     """Sans meal_type, la reponse contient un warning explicit (fallback TDEE/4)."""
-    user_id = 61
+    user_id = "61"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id)
 
@@ -444,7 +444,7 @@ def test_analyze_meal_no_warning_when_meal_type_specified(
     valid_jwt: Callable[..., str],
 ) -> None:
     """meal_type fourni : pas de warning fallback dans la reponse."""
-    user_id = 62
+    user_id = "62"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id)
 
@@ -474,7 +474,7 @@ def test_analyze_meal_persists_serving_sizes_and_meal_type(
     valid_jwt: Callable[..., str],
 ) -> None:
     """serving_sizes (JSONB) et meal_type (TEXT) sont persistes en BDD."""
-    user_id = 63
+    user_id = "63"
     _seed_pizza(db_session)
     _seed_full_profile(db_session, user_id)
 
@@ -522,7 +522,7 @@ def test_analyze_meal_macros_match_medium_portion_of_top_food(
     Pizza est mappee a plats_composes (medium = 350 g). nutrition_entries stocke
     les macros pour 100 g (convention OFF/USDA), donc le repas medium = lookup * 3.5.
     """
-    user_id = 64
+    user_id = "64"
     _seed_pizza(db_session)  # 1300 cal / 100 g
     _seed_full_profile(db_session, user_id)
 
@@ -558,7 +558,7 @@ def test_analyze_meal_unmapped_food_label_falls_back_to_single_medium_portion(
     valid_jwt: Callable[..., str],
 ) -> None:
     """Label hors mapping PNNS : portion_sizes renvoie 1 seule portion medium 100 g."""
-    user_id = 65
+    user_id = "65"
     db_session.execute(
         text(
             "INSERT INTO nutrition_entries "

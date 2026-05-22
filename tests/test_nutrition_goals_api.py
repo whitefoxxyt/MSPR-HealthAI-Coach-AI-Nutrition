@@ -36,7 +36,7 @@ def test_put_creates_profile_and_returns_data(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=42)
+    token = valid_jwt(user_id="42")
     payload = {
         "health_goal": "muscle_gain",
         "calories_target": 2400,
@@ -66,7 +66,7 @@ def test_get_returns_404_when_no_profile(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=42)
+    token = valid_jwt(user_id="42")
 
     response = client.get(
         "/api/v1/nutrition-goals/me",
@@ -80,7 +80,7 @@ def test_get_returns_profile_after_put(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=7)
+    token = valid_jwt(user_id="7")
     auth = {"Authorization": f"Bearer {token}"}
     client.put(
         "/api/v1/nutrition-goals/me",
@@ -102,7 +102,7 @@ def test_second_put_updates_profile(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=12)
+    token = valid_jwt(user_id="12")
     auth = {"Authorization": f"Bearer {token}"}
     client.put(
         "/api/v1/nutrition-goals/me",
@@ -130,7 +130,7 @@ def test_put_with_invalid_health_goal_returns_422(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=42)
+    token = valid_jwt(user_id="42")
 
     response = client.put(
         "/api/v1/nutrition-goals/me",
@@ -145,8 +145,8 @@ def test_user_cannot_read_another_users_profile(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    alice_token = valid_jwt(user_id=100)
-    bob_token = valid_jwt(user_id=200)
+    alice_token = valid_jwt(user_id="100")
+    bob_token = valid_jwt(user_id="200")
 
     client.put(
         "/api/v1/nutrition-goals/me",
@@ -165,8 +165,8 @@ def test_user_cannot_overwrite_another_users_profile(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    alice_token = valid_jwt(user_id=100)
-    bob_token = valid_jwt(user_id=200)
+    alice_token = valid_jwt(user_id="100")
+    bob_token = valid_jwt(user_id="200")
 
     client.put(
         "/api/v1/nutrition-goals/me",
@@ -244,7 +244,7 @@ def test_put_accepts_all_health_goal_values(
     for idx, goal in enumerate(
         ["weight_loss", "muscle_gain", "balance", "sport_performance"]
     ):
-        token = valid_jwt(user_id=500 + idx)
+        token = valid_jwt(user_id="500" + idx)
         response = client.put(
             "/api/v1/nutrition-goals/me",
             json={"health_goal": goal},
@@ -258,7 +258,7 @@ def test_put_with_minimal_payload_succeeds(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=42)
+    token = valid_jwt(user_id="42")
 
     response = client.put(
         "/api/v1/nutrition-goals/me",

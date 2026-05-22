@@ -319,7 +319,7 @@ def _build_compliance_warnings(
 
 
 def _lookup_cached_plan(
-    db: Session, user_id: int, inputs_hash: str, backend: str
+    db: Session, user_id: str, inputs_hash: str, backend: str
 ) -> tuple[FallbackMealPlan, ComplianceStatus, list[str]] | None:
     """Recupere le dernier plan en cache (< 7 jours) pour ce (user, hash, backend).
 

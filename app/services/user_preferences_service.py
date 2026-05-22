@@ -35,14 +35,14 @@ class PreferencesView(BaseModel):
     effective_llm: LLMBackend
 
 
-def get_preferences(user_id: int, db: Session) -> PreferencesView:
+def get_preferences(user_id: str, db: Session) -> PreferencesView:
     profile = _get_profile(user_id, db)
     raw = profile.preferred_llm if profile is not None else None
     return _build_view(raw)
 
 
 def update_preferences(
-    user_id: int, db: Session, prefs: PreferencesUpdate
+    user_id: str, db: Session, prefs: PreferencesUpdate
 ) -> PreferencesView:
     """Upsert de la preference utilisateur.
 
@@ -61,7 +61,7 @@ def update_preferences(
     return _build_view(new_value)
 
 
-def _get_profile(user_id: int, db: Session) -> NutritionGoal | None:
+def _get_profile(user_id: str, db: Session) -> NutritionGoal | None:
     return (
         db.query(NutritionGoal).filter(NutritionGoal.user_id == user_id).one_or_none()
     )

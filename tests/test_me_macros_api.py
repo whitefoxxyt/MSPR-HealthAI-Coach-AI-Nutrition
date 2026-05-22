@@ -44,7 +44,7 @@ def test_get_macros_with_complete_profile_returns_tdee_and_macros(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=42)
+    token = valid_jwt(user_id="42")
     auth = {"Authorization": f"Bearer {token}"}
     client.put(
         "/api/v1/nutrition-goals/me",
@@ -72,7 +72,7 @@ def test_get_macros_without_profile_returns_completion_required(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=99)
+    token = valid_jwt(user_id="99")
 
     response = client.get(
         "/api/v1/me/macros",
@@ -97,7 +97,7 @@ def test_get_macros_with_partial_profile_lists_only_missing_fields(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=11)
+    token = valid_jwt(user_id="11")
     auth = {"Authorization": f"Bearer {token}"}
     # Profil avec health_goal + age + height seulement.
     client.put(
@@ -132,8 +132,8 @@ def test_get_macros_isolates_users(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    alice = valid_jwt(user_id=100)
-    bob = valid_jwt(user_id=200)
+    alice = valid_jwt(user_id="100")
+    bob = valid_jwt(user_id="200")
     # Alice configure un profil complet ; Bob non.
     client.put(
         "/api/v1/nutrition-goals/me",

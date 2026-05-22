@@ -63,7 +63,7 @@ def test_returns_empty_when_user_has_no_plans(
 ) -> None:
     response = client.get(
         "/api/v1/meal-plans/me",
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=42)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="42")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -98,7 +98,7 @@ def test_items_sorted_by_generated_at_desc(
     db_session: Session,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 7
+    user_id = "7"
     db_session.execute(
         text(
             "INSERT INTO meal_plans (user_id, generated_at, inputs_hash) VALUES "
@@ -125,7 +125,7 @@ def test_pagination_returns_window_and_total(
     db_session: Session,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 8
+    user_id = "8"
     db_session.execute(
         text(
             "INSERT INTO meal_plans (user_id, generated_at, inputs_hash) VALUES "
@@ -158,7 +158,7 @@ def test_response_item_shape(
     db_session: Session,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 9
+    user_id = "9"
     plan = {"days": [{"day": 1, "meals": []}]}
     constraints = {"diet_type": "vegan", "duration_days": 7}
     _seed_plan(
@@ -195,7 +195,7 @@ def test_invalid_pagination_params_return_422(
 ) -> None:
     response = client.get(
         f"/api/v1/meal-plans/me?{query}",
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=1)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="1")}"},
     )
     assert response.status_code == 422, response.text
 

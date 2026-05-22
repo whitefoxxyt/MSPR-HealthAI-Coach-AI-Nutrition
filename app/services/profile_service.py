@@ -8,12 +8,12 @@ from app.db.models import NutritionGoal
 from app.models.schemas import NutritionGoalRequest
 
 
-def get_profile(user_id: int, db: Session) -> NutritionGoal | None:
+def get_profile(user_id: str, db: Session) -> NutritionGoal | None:
     return db.query(NutritionGoal).filter(NutritionGoal.user_id == user_id).one_or_none()
 
 
 def upsert_profile(
-    user_id: int, payload: NutritionGoalRequest, db: Session
+    user_id: str, payload: NutritionGoalRequest, db: Session
 ) -> NutritionGoal:
     profile = get_profile(user_id, db)
     fields = _normalize(payload.model_dump())

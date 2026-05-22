@@ -140,11 +140,11 @@ def mock_classifier(
 def valid_jwt() -> Callable[..., str]:
     """Fabrique un JWT HS256 signe avec TEST_AUTH_SECRET.
 
-    valid_jwt(user_id=42, email="x@y.z", expires_in=3600) -> str
+    valid_jwt(user_id="42", email="x@y.z", expires_in=3600) -> str
     """
 
     def _make(
-        user_id: int = 1,
+        user_id: int | str = "1",
         email: str | None = "test@example.com",
         expires_in: int = 3600,
         extra_claims: dict[str, Any] | None = None,

@@ -17,7 +17,7 @@ def test_valid_jwt_default_claims(valid_jwt: Callable[..., str]) -> None:
 
 
 def test_valid_jwt_custom_user_id(valid_jwt: Callable[..., str]) -> None:
-    token = valid_jwt(user_id=42, email=None, extra_claims={"role": "premium"})
+    token = valid_jwt(user_id="42", email=None, extra_claims={"role": "premium"})
 
     payload = jwt.decode(token, TEST_AUTH_SECRET, algorithms=["HS256"])
     assert payload["sub"] == "42"

@@ -60,14 +60,14 @@ def _meal_calories(plan: FallbackMealPlan) -> int:
 # Le hash doit etre stable face a l'ordre des allergies et des cles JSON.
 def test_inputs_hash_canonicalizes_allergies_order() -> None:
     a = PlanInputs(
-        user_id=1,
+        user_id="1",
         objective="weight_loss",
         duration_days=7,
         allergies=["gluten", "arachides", "lactose"],
         diet_type="balance",
     )
     b = PlanInputs(
-        user_id=1,
+        user_id="1",
         objective="weight_loss",
         duration_days=7,
         allergies=["lactose", "gluten", "arachides"],
@@ -77,19 +77,19 @@ def test_inputs_hash_canonicalizes_allergies_order() -> None:
 
 
 def test_inputs_hash_distinguishes_user_id() -> None:
-    a = PlanInputs(user_id=1, objective="muscle_gain", duration_days=7)
-    b = PlanInputs(user_id=2, objective="muscle_gain", duration_days=7)
+    a = PlanInputs(user_id="1", objective="muscle_gain", duration_days=7)
+    b = PlanInputs(user_id="2", objective="muscle_gain", duration_days=7)
     assert compute_inputs_hash(a) != compute_inputs_hash(b)
 
 
 def test_inputs_hash_distinguishes_objective() -> None:
-    a = PlanInputs(user_id=1, objective="weight_loss", duration_days=7)
-    b = PlanInputs(user_id=1, objective="muscle_gain", duration_days=7)
+    a = PlanInputs(user_id="1", objective="weight_loss", duration_days=7)
+    b = PlanInputs(user_id="1", objective="muscle_gain", duration_days=7)
     assert compute_inputs_hash(a) != compute_inputs_hash(b)
 
 
 def test_inputs_hash_returns_sha256_hex_string() -> None:
-    inputs = PlanInputs(user_id=1, objective="balance", duration_days=7)
+    inputs = PlanInputs(user_id="1", objective="balance", duration_days=7)
     h = compute_inputs_hash(inputs)
     assert len(h) == 64
     assert all(c in "0123456789abcdef" for c in h)
@@ -102,7 +102,7 @@ def test_inputs_hash_returns_sha256_hex_string() -> None:
 async def test_generate_plan_success_first_try(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=42, objective="balance", duration_days=7)
+    inputs = PlanInputs(user_id="42", objective="balance", duration_days=7)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(_valid_plan_dict())
     )
@@ -121,7 +121,7 @@ async def test_generate_plan_success_first_try(
 async def test_generate_plan_persists_with_inputs_hash(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=42, objective="weight_loss", duration_days=3)
+    inputs = PlanInputs(user_id="42", objective="weight_loss", duration_days=3)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(_valid_plan_dict())
     )
@@ -142,7 +142,7 @@ async def test_generate_plan_persists_with_inputs_hash(
 async def test_generate_plan_calls_ollama_with_json_format(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=1, objective="balance", duration_days=7)
+    inputs = PlanInputs(user_id="1", objective="balance", duration_days=7)
     route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(_valid_plan_dict())
     )
@@ -165,7 +165,7 @@ async def test_generate_plan_calls_ollama_with_json_format(
 async def test_generate_plan_retries_after_first_failure(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=10, objective="balance", duration_days=2)
+    inputs = PlanInputs(user_id="10", objective="balance", duration_days=2)
     responses = [
         httpx.Response(500, json={"error": "boom"}),
         httpx.Response(200, json=_ollama_response(_valid_plan_dict())),
@@ -183,7 +183,7 @@ async def test_generate_plan_retries_after_first_failure(
 async def test_generate_plan_retries_on_invalid_json(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=11, objective="balance", duration_days=2)
+    inputs = PlanInputs(user_id="11", objective="balance", duration_days=2)
     responses = [
         httpx.Response(200, json={"response": "pas du JSON valide", "done": True}),
         httpx.Response(200, json=_ollama_response(_valid_plan_dict())),
@@ -203,7 +203,7 @@ async def test_generate_plan_retries_on_invalid_json(
 async def test_generate_plan_falls_back_after_max_attempts(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=20, objective="weight_loss", duration_days=1)
+    inputs = PlanInputs(user_id="20", objective="weight_loss", duration_days=1)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         500, json={"error": "boom"}
     )
@@ -251,7 +251,7 @@ async def test_generate_plan_falls_back_after_max_attempts(
 async def test_generate_plan_makes_exactly_three_attempts_before_fallback(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=21, objective="balance", duration_days=1)
+    inputs = PlanInputs(user_id="21", objective="balance", duration_days=1)
     route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         500, json={"error": "boom"}
     )
@@ -268,7 +268,7 @@ async def test_generate_plan_makes_exactly_three_attempts_before_fallback(
 async def test_generate_plan_fallback_without_loader_returns_empty_plan(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=22, objective="balance", duration_days=1)
+    inputs = PlanInputs(user_id="22", objective="balance", duration_days=1)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         500, json={"error": "boom"}
     )
@@ -286,7 +286,7 @@ async def test_generate_plan_fallback_without_loader_returns_empty_plan(
 async def test_generate_plan_returns_cached_without_calling_ollama(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=30, objective="balance", duration_days=2)
+    inputs = PlanInputs(user_id="30", objective="balance", duration_days=2)
     cached = _valid_plan_dict(marker_calories=9999)  # marqueur pour distinguer du mock
     db_session.execute(
         text(
@@ -316,7 +316,7 @@ async def test_generate_plan_returns_cached_without_calling_ollama(
 async def test_generate_plan_ignores_cache_older_than_seven_days(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=31, objective="balance", duration_days=2)
+    inputs = PlanInputs(user_id="31", objective="balance", duration_days=2)
     stale = _valid_plan_dict(marker_calories=9999)
     db_session.execute(
         text(
@@ -346,7 +346,7 @@ async def test_generate_plan_ignores_cache_older_than_seven_days(
 async def test_generate_plan_bypass_cache_calls_ollama_even_with_hit(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=32, objective="balance", duration_days=2)
+    inputs = PlanInputs(user_id="32", objective="balance", duration_days=2)
     cached = _valid_plan_dict(marker_calories=9999)
     db_session.execute(
         text(
@@ -387,7 +387,7 @@ async def test_generate_plan_rejects_plan_with_allergic_ingredient(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
     inputs = PlanInputs(
-        user_id=40,
+        user_id="40",
         objective="balance",
         duration_days=1,
         allergies=["arachides"],
@@ -423,7 +423,7 @@ async def test_generate_plan_does_not_false_positive_lait_in_laitue(
 ) -> None:
     """Anti-regression : 'lait' (allergie) ne doit pas matcher 'laitue' (ingredient)."""
     inputs = PlanInputs(
-        user_id=43,
+        user_id="43",
         objective="balance",
         duration_days=1,
         allergies=["lait"],
@@ -449,7 +449,7 @@ async def test_generate_plan_rejects_allergen_with_accents(
 ) -> None:
     """L'allergene 'lait' doit matcher 'Lait ecreme' meme avec capitalisation/accent."""
     inputs = PlanInputs(
-        user_id=44,
+        user_id="44",
         objective="balance",
         duration_days=1,
         allergies=["lait"],
@@ -479,7 +479,7 @@ async def test_generate_plan_rejects_allergen_with_accents(
 async def test_generate_plan_rejects_invalid_pydantic_structure(
     db_session, mock_ollama: respx.MockRouter
 ) -> None:
-    inputs = PlanInputs(user_id=41, objective="balance", duration_days=1)
+    inputs = PlanInputs(user_id="41", objective="balance", duration_days=1)
     invalid = {"days": "not a list"}  # type incorrect : doit etre rejete par Pydantic
     good = _valid_plan_dict()
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(
@@ -515,7 +515,7 @@ async def test_generate_plan_semaphore_limits_concurrent_ollama_calls(
     mock_ollama.post(re.compile(r".*/api/generate$")).mock(side_effect=slow_handler)
 
     inputs_list = [
-        PlanInputs(user_id=50 + i, objective="balance", duration_days=1)
+        PlanInputs(user_id="50" + i, objective="balance", duration_days=1)
         for i in range(4)
     ]
     results = await asyncio.gather(
@@ -547,7 +547,7 @@ async def test_generate_plan_falls_back_to_ollama_when_mistral_fails(
     monkeypatch.setattr(settings, "default_llm", "mistral")
     monkeypatch.setattr(settings, "mistral_api_key", "sk-test-invalid")
 
-    inputs = PlanInputs(user_id=60, objective="balance", duration_days=1)
+    inputs = PlanInputs(user_id="60", objective="balance", duration_days=1)
 
     mistral_route = mock_ollama.post(
         "https://api.mistral.ai/v1/chat/completions"

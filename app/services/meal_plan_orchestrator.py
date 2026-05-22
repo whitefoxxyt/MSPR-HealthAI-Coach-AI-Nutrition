@@ -22,7 +22,7 @@ _PREMIUM_TIERS = frozenset({"premium", "premium_plus"})
 
 
 async def generate(
-    user_id: int,
+    user_id: str,
     request: MealPlanRequest,
     jwt: str,
     db: Session,
@@ -63,7 +63,7 @@ async def generate(
 
 
 def _resolve_health_goal(
-    explicit: HealthGoal | None, user_id: int, db: Session
+    explicit: HealthGoal | None, user_id: str, db: Session
 ) -> HealthGoal:
     if explicit is not None:
         return explicit
@@ -74,7 +74,7 @@ def _resolve_health_goal(
 
 
 def _build_inputs(
-    user_id: int, request: MealPlanRequest, health_goal: HealthGoal
+    user_id: str, request: MealPlanRequest, health_goal: HealthGoal
 ) -> PlanInputs:
     budget = (
         Decimal(str(request.budget_eur_per_day))
@@ -91,7 +91,7 @@ def _build_inputs(
     )
 
 
-def _latest_plan_id(db: Session, user_id: int, inputs_hash: str) -> int:
+def _latest_plan_id(db: Session, user_id: str, inputs_hash: str) -> int:
     """Recupere l'id du plan que generate_plan vient de persister ou de servir du cache.
 
     Pas de filtre par backend : si le fallback chain a kick in (Mistral KO ->

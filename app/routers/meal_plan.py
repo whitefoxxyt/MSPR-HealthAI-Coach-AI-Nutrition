@@ -17,16 +17,12 @@ from app.services.decrim_retry_orchestrator import InfeasibleConstraintsError
 router = APIRouter()
 
 
-def _auth(authorization: str | None) -> tuple[int, str]:
+def _auth(authorization: str | None) -> tuple[str, str]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header invalide.")
     token = authorization.removeprefix("Bearer ")
     identity = jwt_decoder.decode(token)
-    try:
-        user_id = int(identity.user_id)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=401, detail="Sujet JWT invalide.") from exc
-    return user_id, token
+    return identity.user_id, token
 
 
 _PLAN_DESCRIPTION = """

@@ -21,7 +21,7 @@ def _default_env_mistral(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_get_preferences_without_profile_returns_env_default(
     db_session: Session,
 ) -> None:
-    view = get_preferences(user_id=1, db=db_session)
+    view = get_preferences(user_id="1", db=db_session)
 
     assert view.preferred_llm is None
     assert view.effective_llm == "mistral"
@@ -38,7 +38,7 @@ def test_get_preferences_returns_user_pref_when_set(
     )
     db_session.commit()
 
-    view = get_preferences(user_id=2, db=db_session)
+    view = get_preferences(user_id="2", db=db_session)
 
     # La preference user prime sur le defaut env (mistral).
     assert view.preferred_llm == "ollama"
@@ -49,7 +49,7 @@ def test_update_preferences_creates_profile_when_none_exists(
     db_session: Session,
 ) -> None:
     view = update_preferences(
-        user_id=3,
+        user_id="3",
         db=db_session,
         prefs=PreferencesUpdate(preferred_llm="ollama"),
     )
@@ -68,10 +68,10 @@ def test_update_preferences_overwrites_existing_value(
     db_session: Session,
 ) -> None:
     update_preferences(
-        user_id=4, db=db_session, prefs=PreferencesUpdate(preferred_llm="ollama")
+        user_id="4", db=db_session, prefs=PreferencesUpdate(preferred_llm="ollama")
     )
     view = update_preferences(
-        user_id=4, db=db_session, prefs=PreferencesUpdate(preferred_llm="mistral")
+        user_id="4", db=db_session, prefs=PreferencesUpdate(preferred_llm="mistral")
     )
 
     assert view.preferred_llm == "mistral"
@@ -82,10 +82,10 @@ def test_update_preferences_with_none_resets_to_env_default(
     db_session: Session,
 ) -> None:
     update_preferences(
-        user_id=5, db=db_session, prefs=PreferencesUpdate(preferred_llm="ollama")
+        user_id="5", db=db_session, prefs=PreferencesUpdate(preferred_llm="ollama")
     )
     view = update_preferences(
-        user_id=5, db=db_session, prefs=PreferencesUpdate(preferred_llm=None)
+        user_id="5", db=db_session, prefs=PreferencesUpdate(preferred_llm=None)
     )
 
     # Reset : preferred_llm est NULL en BDD, effective_llm tombe sur le defaut env.

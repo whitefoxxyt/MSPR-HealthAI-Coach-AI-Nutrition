@@ -35,7 +35,7 @@ def test_get_preferences_without_profile_returns_env_default(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=42)
+    token = valid_jwt(user_id="42")
 
     response = client.get(
         "/api/v1/me/preferences",
@@ -52,7 +52,7 @@ def test_patch_preferences_sets_user_pref_and_get_returns_it(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=43)
+    token = valid_jwt(user_id="43")
     auth = {"Authorization": f"Bearer {token}"}
 
     patch = client.patch(
@@ -73,7 +73,7 @@ def test_patch_preferences_with_unknown_backend_returns_422(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    token = valid_jwt(user_id=44)
+    token = valid_jwt(user_id="44")
 
     response = client.patch(
         "/api/v1/me/preferences",
@@ -89,7 +89,7 @@ def test_patch_preferences_with_null_resets_to_default(
     valid_jwt: Callable[..., str],
     db_session: Session,
 ) -> None:
-    token = valid_jwt(user_id=45)
+    token = valid_jwt(user_id="45")
     auth = {"Authorization": f"Bearer {token}"}
     client.patch(
         "/api/v1/me/preferences", json={"preferred_llm": "ollama"}, headers=auth
@@ -124,8 +124,8 @@ def test_preferences_isolated_per_user(
     client: TestClient,
     valid_jwt: Callable[..., str],
 ) -> None:
-    alice = valid_jwt(user_id=100)
-    bob = valid_jwt(user_id=200)
+    alice = valid_jwt(user_id="100")
+    bob = valid_jwt(user_id="200")
     client.patch(
         "/api/v1/me/preferences",
         json={"preferred_llm": "ollama"},

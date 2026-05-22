@@ -8,7 +8,7 @@ from app.models.schemas import MealPlanHistoryItem, PaginatedPlansResponse
 
 
 def list_user_plans(
-    user_id: int, limit: int, offset: int, db: Session
+    user_id: str, limit: int, offset: int, db: Session
 ) -> PaginatedPlansResponse:
     base = db.query(MealPlan).filter(MealPlan.user_id == user_id)
     total = base.with_entities(func.count(MealPlan.id)).scalar() or 0

@@ -38,7 +38,7 @@ def test_meal_analysis_persists_v11_fields(db_session: Session) -> None:
     ]
 
     analysis = MealAnalysis(
-        user_id=42,
+        user_id="42",
         photo_url="https://example.test/p.jpg",
         detected_foods=[{"label": "pizza", "score": 0.85}],
         macros={"calories": 400, "protein_g": 20},
@@ -50,7 +50,7 @@ def test_meal_analysis_persists_v11_fields(db_session: Session) -> None:
     db_session.add(analysis)
     db_session.commit()
 
-    fetched = db_session.query(MealAnalysis).filter_by(user_id=42).one()
+    fetched = db_session.query(MealAnalysis).filter_by(user_id="42").one()
     assert fetched.imbalances == imbalances
     assert fetched.serving_sizes == serving_sizes
     assert fetched.meal_type == "lunch"
@@ -59,11 +59,11 @@ def test_meal_analysis_persists_v11_fields(db_session: Session) -> None:
 def test_meal_analysis_v11_fields_default_to_null(db_session: Session) -> None:
     # Les 3 colonnes V11 sur meal_analyses sont nullable. Quand on insere sans
     # les renseigner, elles doivent rester NULL (pas de default applicatif).
-    analysis = MealAnalysis(user_id=7)
+    analysis = MealAnalysis(user_id="7")
     db_session.add(analysis)
     db_session.commit()
 
-    fetched = db_session.query(MealAnalysis).filter_by(user_id=7).one()
+    fetched = db_session.query(MealAnalysis).filter_by(user_id="7").one()
     assert fetched.imbalances is None
     assert fetched.serving_sizes is None
     assert fetched.meal_type is None
@@ -73,7 +73,7 @@ def test_meal_plan_persists_v11_fields(db_session: Session) -> None:
     warnings = ["Budget journalier depasse de 1.20 EUR le mardi"]
 
     plan = MealPlan(
-        user_id=99,
+        user_id="99",
         plan={"days": []},
         objective="weight_loss",
         constraints={"allergies": ["peanut"], "diet": "vegan", "budget_eur_per_day": 8.0},
@@ -83,7 +83,7 @@ def test_meal_plan_persists_v11_fields(db_session: Session) -> None:
     db_session.add(plan)
     db_session.commit()
 
-    fetched = db_session.query(MealPlan).filter_by(user_id=99).one()
+    fetched = db_session.query(MealPlan).filter_by(user_id="99").one()
     assert fetched.compliance_status == "partial_budget"
     assert fetched.compliance_warnings == warnings
 
@@ -91,7 +91,7 @@ def test_meal_plan_persists_v11_fields(db_session: Session) -> None:
 def test_meal_plan_compliance_status_defaults_to_full(db_session: Session) -> None:
     # V11 : compliance_status TEXT NOT NULL DEFAULT 'full'. Insertion sans la
     # colonne doit retourner 'full' apres flush + refresh (default cote BDD).
-    plan = MealPlan(user_id=11)
+    plan = MealPlan(user_id="11")
     db_session.add(plan)
     db_session.commit()
     db_session.refresh(plan)

@@ -461,7 +461,7 @@ def _random_inputs(rng: random.Random, idx: int, with_constraints: bool) -> Plan
         allergies = []
         budget = None
     return PlanInputs(
-        user_id=1_000_000 + idx,
+        user_id=str(1_000_000 + idx),
         objective=objective,
         duration_days=1,
         diet_type=diet,

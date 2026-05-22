@@ -18,14 +18,11 @@ from app.services.user_preferences_service import PreferencesUpdate, Preferences
 router = APIRouter(prefix="/me")
 
 
-def _user_id_from_auth(authorization: str | None) -> int:
+def _user_id_from_auth(authorization: str | None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization header invalide.")
     identity = jwt_decoder.decode(authorization.removeprefix("Bearer "))
-    try:
-        return int(identity.user_id)
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=401, detail="Sujet JWT invalide.") from exc
+    return identity.user_id
 
 
 _DESCRIPTION = """

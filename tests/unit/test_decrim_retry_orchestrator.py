@@ -68,7 +68,7 @@ def test_build_plan_prompt_includes_few_shot_block_before_generation_instruction
     None
 ):
     inputs = PlanInputs(
-        user_id=42,
+        user_id="42",
         objective="balance",
         duration_days=3,
         diet_type="omnivore",
@@ -98,7 +98,7 @@ def test_build_plan_prompt_includes_few_shot_block_before_generation_instruction
 async def test_success_first_try_returns_full_status(
     mock_ollama: respx.MockRouter,
 ) -> None:
-    inputs = PlanInputs(user_id=1, objective="balance", duration_days=1)
+    inputs = PlanInputs(user_id="1", objective="balance", duration_days=1)
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response(_plan_dict())
     )
@@ -118,7 +118,7 @@ async def test_partial_retry_on_allergy_succeeds_at_attempt_two(
     mock_ollama: respx.MockRouter,
 ) -> None:
     inputs = PlanInputs(
-        user_id=2,
+        user_id="2",
         objective="balance",
         duration_days=1,
         allergies=["arachides"],
@@ -151,7 +151,7 @@ async def test_full_day_retry_on_budget_succeeds_at_attempt_two(
     mock_ollama: respx.MockRouter,
 ) -> None:
     inputs = PlanInputs(
-        user_id=3,
+        user_id="3",
         objective="weight_loss",
         duration_days=2,
         budget_per_day=10.0,
@@ -189,7 +189,7 @@ async def test_three_retries_fail_then_fallback_with_allergy_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     inputs = PlanInputs(
-        user_id=4,
+        user_id="4",
         objective="balance",
         duration_days=1,
         allergies=["arachides"],
@@ -227,7 +227,7 @@ async def test_three_retries_fail_on_budget_returns_partial_budget(
     mock_ollama: respx.MockRouter,
 ) -> None:
     inputs = PlanInputs(
-        user_id=5,
+        user_id="5",
         objective="balance",
         duration_days=1,
         budget_per_day=10.0,
@@ -261,7 +261,7 @@ async def test_three_retries_fail_then_clean_fallback_returns_static_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     inputs = PlanInputs(
-        user_id=7,
+        user_id="7",
         objective="balance",
         duration_days=1,
         allergies=["arachides"],
@@ -301,7 +301,7 @@ async def test_anti_cycle_switches_to_full_plan_retry(
     mock_ollama: respx.MockRouter,
 ) -> None:
     inputs = PlanInputs(
-        user_id=6,
+        user_id="6",
         objective="balance",
         duration_days=1,
         allergies=["arachides"],

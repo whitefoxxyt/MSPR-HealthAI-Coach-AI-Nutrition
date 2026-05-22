@@ -26,7 +26,7 @@ def _request(headers: dict[str, str] | None = None, client_host: str | None = "1
 
 
 def test_key_uses_user_id_for_valid_jwt(valid_jwt: Callable[..., str]) -> None:
-    token = valid_jwt(user_id=42)
+    token = valid_jwt(user_id="42")
     key = _user_key(_request({"Authorization": f"Bearer {token}"}))
     assert key == "user:42"
 

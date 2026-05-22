@@ -48,7 +48,7 @@ _NUTRIENT_TO_MATRIX_KEY: dict[tuple[Nutrient, ImbalanceStatus], matrix.Imbalance
 
 async def analyze_meal(
     image_bytes: bytes,
-    user_id: int,
+    user_id: str,
     db: Session,
     meal_type: MealType | None = None,
 ) -> dict[str, Any]:
@@ -264,7 +264,7 @@ async def _generate_recommendation(
 def _persist_analysis(
     *,
     db: Session,
-    user_id: int,
+    user_id: str,
     detected_foods: list[dict[str, Any]],
     macros: dict[str, float],
     recommendations: list[str],

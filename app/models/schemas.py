@@ -96,7 +96,7 @@ class NutritionGoalRequest(BaseModel):
 
 
 class NutritionGoalResponse(NutritionGoalRequest):
-    user_id: int
+    user_id: str
 
     model_config = {"from_attributes": True}
 
@@ -224,7 +224,7 @@ class PaginatedPlansResponse(BaseModel):
 # Inputs pour la generation de plan repas. allergies est triee dans
 # canonicalize_inputs avant calcul du hash.
 class PlanInputs(BaseModel):
-    user_id: int
+    user_id: str
     objective: str
     duration_days: int = 7
     diet_type: str | None = None

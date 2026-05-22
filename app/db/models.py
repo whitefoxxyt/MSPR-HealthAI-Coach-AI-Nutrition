@@ -7,7 +7,8 @@ from sqlalchemy.orm import DeclarativeBase
 
 # user_id est un identifiant opaque venant du JWT (decode local avec
 # BETTER_AUTH_SECRET). Pas de FK : la table users a ete droppee par MSPR-DB
-# V7__drop_users_table.sql.
+# V7__drop_users_table.sql. Format VARCHAR(64) pour accepter les nanoID de
+# better-auth (32 chars alphanumeriques) ; cf. V14 MSPR-DB.
 class Base(DeclarativeBase):
     pass
 
@@ -16,7 +17,7 @@ class MealAnalysis(Base):
     __tablename__ = "meal_analyses"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, nullable=False)
+    user_id = Column(String(64), nullable=False)
     photo_url = Column(String(500))
     detected_foods = Column(JSONB, nullable=False, server_default=text("'[]'"))
     macros = Column(JSONB, nullable=False, server_default=text("'{}'"))
@@ -39,7 +40,7 @@ class MealPlan(Base):
     __tablename__ = "meal_plans"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(BigInteger, nullable=False)
+    user_id = Column(String(64), nullable=False)
     plan = Column(JSONB, nullable=False, server_default=text("'{}'"))
     objective = Column(String(100))
     constraints = Column(JSONB, nullable=False, server_default=text("'{}'"))
@@ -60,7 +61,7 @@ class MealPlan(Base):
 class NutritionGoal(Base):
     __tablename__ = "nutrition_goals"
 
-    user_id = Column(BigInteger, primary_key=True)
+    user_id = Column(String(64), primary_key=True)
     calories_target = Column(Integer)
     protein_g = Column(Numeric(8, 2))
     carbs_g = Column(Numeric(8, 2))

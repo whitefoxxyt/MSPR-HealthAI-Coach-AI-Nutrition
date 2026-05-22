@@ -61,7 +61,7 @@ def _valid_plan_json() -> str:
 
 def _sample_inputs() -> PlanInputs:
     return PlanInputs(
-        user_id=1,
+        user_id="1",
         objective="weight_loss",
         duration_days=1,
         diet_type="omnivore",

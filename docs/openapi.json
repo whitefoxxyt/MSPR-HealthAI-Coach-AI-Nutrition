@@ -1601,7 +1601,7 @@
             ]
           },
           "user_id": {
-            "type": "integer",
+            "type": "string",
             "title": "User Id"
           }
         },

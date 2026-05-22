@@ -61,7 +61,7 @@ def test_returns_empty_when_user_has_no_analyses(
 ) -> None:
     response = client.get(
         "/api/v1/meal-analyses/me",
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=42)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="42")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -96,7 +96,7 @@ def test_items_sorted_by_created_at_desc(
     db_session: Session,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 7
+    user_id = "7"
     db_session.execute(
         text(
             "INSERT INTO meal_analyses (user_id, created_at) VALUES "
@@ -123,7 +123,7 @@ def test_pagination_returns_window_and_total(
     db_session: Session,
     valid_jwt: Callable[..., str],
 ) -> None:
-    user_id = 8
+    user_id = "8"
     # 5 analyses datees du plus ancien au plus recent.
     db_session.execute(
         text(
@@ -164,7 +164,7 @@ def test_invalid_pagination_params_return_422(
 ) -> None:
     response = client.get(
         f"/api/v1/meal-analyses/me?{query}",
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=1)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="1")}"},
     )
     assert response.status_code == 422, response.text
 

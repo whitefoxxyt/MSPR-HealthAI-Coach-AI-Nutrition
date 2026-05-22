@@ -119,7 +119,7 @@ def test_generate_meal_plan_returns_200_with_plan_id_and_days(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=42)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="42")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -141,7 +141,7 @@ def test_free_tier_cache_hit_skips_second_ollama_call(
     route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_payload(_valid_plan(marker_calories=1234))
     )
-    headers = {"Authorization": f"Bearer {valid_jwt(user_id=200)}"}
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id="200")}"}
     body = {
         "health_goal": "balance",
         "diet_type": "omnivore",
@@ -175,7 +175,7 @@ def test_premium_tier_bypasses_cache_and_regenerates(
             httpx.Response(200, json=_ollama_payload(plans[1])),
         ]
     )
-    headers = {"Authorization": f"Bearer {valid_jwt(user_id=300)}"}
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id="300")}"}
     body = {
         "health_goal": "balance",
         "diet_type": "omnivore",
@@ -204,7 +204,7 @@ def test_premium_plus_tier_also_bypasses_cache(
     route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_payload(_valid_plan())
     )
-    headers = {"Authorization": f"Bearer {valid_jwt(user_id=301)}"}
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id="301")}"}
     body = {
         "health_goal": "balance",
         "diet_type": "omnivore",
@@ -238,7 +238,7 @@ def test_falls_back_to_static_plan_when_ollama_unavailable(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=400)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="400")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -273,7 +273,7 @@ def test_invalid_llm_json_retries_then_falls_back(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=410)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="410")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -306,7 +306,7 @@ def test_invalid_then_valid_llm_returns_success_without_fallback(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=411)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="411")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -345,7 +345,7 @@ def test_health_goal_falls_back_to_profile_when_request_null(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=500)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="500")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -378,7 +378,7 @@ def test_health_goal_defaults_to_balance_when_no_profile(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=501)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="501")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -416,7 +416,7 @@ def test_explicit_health_goal_overrides_profile(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=502)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="502")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -440,7 +440,7 @@ def test_rate_limit_returns_429_after_threshold(
     mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_payload(_valid_plan())
     )
-    headers = {"Authorization": f"Bearer {valid_jwt(user_id=600)}"}
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id="600")}"}
     body = {
         "health_goal": "balance",
         "diet_type": "omnivore",
@@ -479,14 +479,14 @@ def test_rate_limit_keys_by_user_id_not_ip(
     }
 
     # User 700 : epuise sa limite de minute (3 + 1 -> 429).
-    headers_700 = {"Authorization": f"Bearer {valid_jwt(user_id=700)}"}
+    headers_700 = {"Authorization": f"Bearer {valid_jwt(user_id="700")}"}
     for _ in range(3):
         client.post("/api/v1/generate-meal-plan", json=body, headers=headers_700)
     blocked = client.post("/api/v1/generate-meal-plan", json=body, headers=headers_700)
     assert blocked.status_code == 429
 
     # User 701 : son quota n'est pas affecte.
-    headers_701 = {"Authorization": f"Bearer {valid_jwt(user_id=701)}"}
+    headers_701 = {"Authorization": f"Bearer {valid_jwt(user_id="701")}"}
     fresh = client.post("/api/v1/generate-meal-plan", json=body, headers=headers_701)
     assert fresh.status_code == 200, fresh.text
 
@@ -511,7 +511,7 @@ def test_successful_generation_persists_row_with_inputs_hash(
             "allergies": ["arachides"],
             "budget_eur_per_day": 12,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=800)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="800")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -548,7 +548,7 @@ def test_fallback_generation_also_persists_row(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=801)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="801")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -600,7 +600,7 @@ def test_invalid_diet_type_returns_422(
     response = client.post(
         "/api/v1/generate-meal-plan",
         json={"diet_type": "carnivore", "duration_days": 1},
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=900)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="900")}"},
     )
     assert response.status_code == 422
 
@@ -612,7 +612,7 @@ def test_invalid_health_goal_returns_422(
     response = client.post(
         "/api/v1/generate-meal-plan",
         json={"diet_type": "omnivore", "health_goal": "marathon"},
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=901)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="901")}"},
     )
     assert response.status_code == 422
 
@@ -624,7 +624,7 @@ def test_negative_duration_returns_422(
     response = client.post(
         "/api/v1/generate-meal-plan",
         json={"diet_type": "omnivore", "duration_days": 0},
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=902)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="902")}"},
     )
     assert response.status_code == 422
 
@@ -636,7 +636,7 @@ def test_missing_diet_type_returns_422(
     response = client.post(
         "/api/v1/generate-meal-plan",
         json={"duration_days": 7},
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=903)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="903")}"},
     )
     assert response.status_code == 422
 
@@ -663,7 +663,7 @@ def test_response_includes_compliance_status_and_warnings_on_full(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=1000)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="1000")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -691,7 +691,7 @@ def test_response_includes_static_fallback_when_ollama_down(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=1001)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="1001")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -750,7 +750,7 @@ def test_infeasible_constraints_returns_503_with_explicit_body(
             "duration_days": 1,
             "allergies": ["arachides"],
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=1002)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="1002")}"},
     )
 
     assert response.status_code == 503, response.text
@@ -780,7 +780,7 @@ def test_compliance_persisted_to_meal_plans_table(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=1003)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="1003")}"},
     )
 
     assert response.status_code == 200, response.text
@@ -810,7 +810,7 @@ def test_user_pref_ollama_persists_llm_backend_used_ollama(
     db_session: Session,
 ) -> None:
     """User pref preferred_llm=ollama -> plan genere via Ollama et trace en BDD."""
-    headers = {"Authorization": f"Bearer {valid_jwt(user_id=1100)}"}
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id="1100")}"}
     client.patch(
         "/api/v1/me/preferences", json={"preferred_llm": "ollama"}, headers=headers
     )
@@ -851,7 +851,7 @@ def test_user_pref_switch_invalidates_cache_and_regenerates(
     le plan cache Ollama. Verifie la separation effective du cache par backend.
     """
     monkeypatch.setattr(settings, "mistral_api_key", "sk-test-valid")
-    headers = {"Authorization": f"Bearer {valid_jwt(user_id=1101)}"}
+    headers = {"Authorization": f"Bearer {valid_jwt(user_id="1101")}"}
     body = {
         "health_goal": "balance",
         "diet_type": "omnivore",
@@ -928,7 +928,7 @@ def test_generate_meal_plan_falls_back_to_ollama_when_mistral_unavailable(
             "allergies": [],
             "budget_eur_per_day": 15,
         },
-        headers={"Authorization": f"Bearer {valid_jwt(user_id=1004)}"},
+        headers={"Authorization": f"Bearer {valid_jwt(user_id="1004")}"},
     )
 
     assert response.status_code == 200, response.text

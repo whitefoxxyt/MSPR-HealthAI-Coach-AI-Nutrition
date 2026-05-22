@@ -63,7 +63,7 @@ async def test_generate_plan_with_real_ollama(
     """Verifie que generate_plan fonctionne contre un vrai Ollama (1 generation)."""
     monkeypatch.setattr(settings, "ollama_host", ollama_host)
     inputs = PlanInputs(
-        user_id=999,
+        user_id="999",
         objective="balance",
         duration_days=1,
         diet_type="omnivore",
