@@ -19,6 +19,8 @@ def list_user_analyses(
             MealAnalysis.macros,
             MealAnalysis.recommendations,
             MealAnalysis.created_at,
+            MealAnalysis.photo_url,
+            MealAnalysis.meal_type,
         )
         .order_by(MealAnalysis.created_at.desc())
         .limit(limit)
@@ -32,6 +34,8 @@ def list_user_analyses(
             macros=row.macros or {},
             recommendations=row.recommendations or [],
             created_at=row.created_at,
+            image_url=row.photo_url,
+            meal_type=row.meal_type,
         )
         for row in rows
     ]

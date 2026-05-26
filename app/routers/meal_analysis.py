@@ -118,6 +118,8 @@ _HISTORY_RESPONSE_EXAMPLE = {
             },
             "recommendations": ["Reduis la portion au prochain repas."],
             "created_at": "2026-04-29T10:15:00",
+            "image_url": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+            "meal_type": "lunch",
         }
     ],
     "total": 137,

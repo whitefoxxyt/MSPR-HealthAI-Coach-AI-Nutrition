@@ -21,6 +21,7 @@ from app.models.schemas import (
 )
 from app.services import llm_client
 from app.services.food_classifier import classify_image
+from app.services.image_thumbnail import to_data_url
 from app.services.imbalance_detector import detect, imbalance_to_text
 from app.services.nutrition_engine import (
     IncompleteProfile,
@@ -91,6 +92,10 @@ async def analyze_meal(
 
     warnings = _build_warnings(meal_type)
 
+    # Thumbnail data URL pour affichage dans l'historique. Calcul une fois,
+    # reutilisee dans les deux branches de persistance.
+    photo_data_url = to_data_url(image_bytes)
+
     # 6. Profil incomplet : pas de tags, pas de LLM, on indique au front qu'il
     # faut completer la biometrie.
     if isinstance(user_profile, IncompleteProfile):
@@ -104,6 +109,7 @@ async def analyze_meal(
             imbalances=[],
             meal_type=meal_type,
             serving_sizes=serving_sizes_by_food,
+            photo_url=photo_data_url,
         )
         return {
             "analysis_id": analysis.id,
@@ -157,6 +163,7 @@ async def analyze_meal(
         imbalances=tags,
         meal_type=meal_type,
         serving_sizes=serving_sizes_by_food,
+        photo_url=photo_data_url,
     )
 
     return {
@@ -272,9 +279,11 @@ def _persist_analysis(
     imbalances: list[ImbalanceTag],
     meal_type: MealType | None,
     serving_sizes: list[list[dict[str, Any]]],
+    photo_url: str | None = None,
 ) -> MealAnalysis:
     analysis = MealAnalysis(
         user_id=user_id,
+        photo_url=photo_url,
         detected_foods=detected_foods,
         macros=macros,
         confidence_scores={

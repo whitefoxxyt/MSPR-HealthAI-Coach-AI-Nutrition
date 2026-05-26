@@ -37,6 +37,10 @@ class MealAnalysisItem(BaseModel):
     macros: dict[str, float]
     recommendations: list[str]
     created_at: datetime
+    # Data URL JPEG base64 generee par image_thumbnail au moment de l'analyse
+    # (cf. V15). Optionnel pour retrocompatibilite des lignes pre-V15.
+    image_url: str | None = None
+    meal_type: str | None = None
 
     model_config = {"from_attributes": True}
 
