@@ -36,7 +36,7 @@ Pipeline applique :
 4. Cache miss : appel Ollama (Gemma3:4b) avec prompt structure et `format: json`. En cas d'echec ou JSON invalide, repli sur la matrice 16 plans statiques (`fallback: true`).
 5. Persistance dans `meal_plans` et renvoi du plan complet.
 
-**Rate limit** : 10 requetes par heure et 3 par minute par utilisateur (header standard `Retry-After` en cas de depassement).
+**Rate limit** : 30 requetes par heure et 10 par minute par utilisateur (header standard `Retry-After` en cas de depassement).
 
 **Latence** : 5-30 s sur CPU pour une generation LLM. Cache hit < 100 ms.
 
@@ -115,7 +115,7 @@ _PLAN_RESPONSE_EXAMPLE = {
             422: {
                 "description": "Payload invalide (regime inconnu, duree hors [1, 30], etc)."
             },
-            429: {"description": "Rate limit depasse (10/heure ou 3/minute)."},
+            429: {"description": "Rate limit depasse (30/heure ou 10/minute)."},
             503: {
                 "description": (
                     "Contraintes infaisables (allergies / regime impossibles a satisfaire) "

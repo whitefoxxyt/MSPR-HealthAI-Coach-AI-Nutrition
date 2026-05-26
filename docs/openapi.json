@@ -224,7 +224,9 @@
                       "recommendations": [
                         "Reduis la portion au prochain repas."
                       ],
-                      "created_at": "2026-04-29T10:15:00"
+                      "created_at": "2026-04-29T10:15:00",
+                      "image_url": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+                      "meal_type": "lunch"
                     }
                   ],
                   "total": 137,
@@ -258,7 +260,7 @@
           "Plans"
         ],
         "summary": "Genere un plan repas personnalise (1 a 30 jours)",
-        "description": "Genere un plan repas personnalise sur 1 a 30 jours en fonction de l'objectif sante, du regime, des allergies et du budget.\n\nPipeline applique :\n\n1. Resolution de l'objectif sante : valeur explicite > profil utilisateur (`nutrition-goals/me`) > `balance` par defaut.\n2. Lecture des entitlements (tier utilisateur via MSPR-AUTH). Les tiers `premium` et `premium_plus` bypassent le cache et regenerent systematiquement.\n3. Cache contenu : hash canonique des inputs (objectif, regime, allergies triees, budget, calories cible, duree). Cache hit, on renvoie le plan stocke.\n4. Cache miss : appel Ollama (Gemma3:4b) avec prompt structure et `format: json`. En cas d'echec ou JSON invalide, repli sur la matrice 16 plans statiques (`fallback: true`).\n5. Persistance dans `meal_plans` et renvoi du plan complet.\n\n**Rate limit** : 10 requetes par heure et 3 par minute par utilisateur (header standard `Retry-After` en cas de depassement).\n\n**Latence** : 5-30 s sur CPU pour une generation LLM. Cache hit < 100 ms.\n\n**Authentification** : header `Authorization: Bearer <jwt>` requis. Le JWT est aussi propage a MSPR-AUTH pour resoudre les entitlements.",
+        "description": "Genere un plan repas personnalise sur 1 a 30 jours en fonction de l'objectif sante, du regime, des allergies et du budget.\n\nPipeline applique :\n\n1. Resolution de l'objectif sante : valeur explicite > profil utilisateur (`nutrition-goals/me`) > `balance` par defaut.\n2. Lecture des entitlements (tier utilisateur via MSPR-AUTH). Les tiers `premium` et `premium_plus` bypassent le cache et regenerent systematiquement.\n3. Cache contenu : hash canonique des inputs (objectif, regime, allergies triees, budget, calories cible, duree). Cache hit, on renvoie le plan stocke.\n4. Cache miss : appel Ollama (Gemma3:4b) avec prompt structure et `format: json`. En cas d'echec ou JSON invalide, repli sur la matrice 16 plans statiques (`fallback: true`).\n5. Persistance dans `meal_plans` et renvoi du plan complet.\n\n**Rate limit** : 30 requetes par heure et 10 par minute par utilisateur (header standard `Retry-After` en cas de depassement).\n\n**Latence** : 5-30 s sur CPU pour une generation LLM. Cache hit < 100 ms.\n\n**Authentification** : header `Authorization: Bearer <jwt>` requis. Le JWT est aussi propage a MSPR-AUTH pour resoudre les entitlements.",
         "operationId": "generate_meal_plan_api_v1_generate_meal_plan_post",
         "parameters": [
           {
@@ -382,7 +384,7 @@
             }
           },
           "429": {
-            "description": "Rate limit depasse (10/heure ou 3/minute)."
+            "description": "Rate limit depasse (30/heure ou 10/minute)."
           }
         }
       }
@@ -1105,6 +1107,28 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "meal_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meal Type"
           }
         },
         "type": "object",

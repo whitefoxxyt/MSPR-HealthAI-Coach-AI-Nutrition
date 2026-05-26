@@ -478,9 +478,9 @@ def test_rate_limit_keys_by_user_id_not_ip(
         "budget_eur_per_day": 15,
     }
 
-    # User 700 : epuise sa limite de minute (3 + 1 -> 429).
+    # User 700 : epuise sa limite de minute (10/minute, le 11e doit etre bloque).
     headers_700 = {"Authorization": f"Bearer {valid_jwt(user_id="700")}"}
-    for _ in range(3):
+    for _ in range(10):
         client.post("/api/v1/generate-meal-plan", json=body, headers=headers_700)
     blocked = client.post("/api/v1/generate-meal-plan", json=body, headers=headers_700)
     assert blocked.status_code == 429
