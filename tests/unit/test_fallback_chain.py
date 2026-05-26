@@ -98,6 +98,34 @@ async def test_both_providers_fail_raises_secondary_error() -> None:
     assert len(secondary.calls) == 1
 
 
+# T4bis : misconfig DEFAULT_LLM=mistral mais MISTRAL_API_KEY vide -> chain ne
+# contient qu'Ollama. On bascule transparent sur Ollama plutot que de lever.
+
+
+@pytest.mark.asyncio
+async def test_unknown_primary_falls_back_to_available_provider() -> None:
+    ollama = _FakeProvider('{"plan":"from-ollama"}')
+    chain = FallbackChain(providers={"ollama": ollama})
+
+    content, used = await chain.generate(
+        "prompt", schema=None, primary_backend="mistral"
+    )
+
+    assert content == '{"plan":"from-ollama"}'
+    assert used == "ollama"
+    assert len(ollama.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_empty_chain_raises_explicit_value_error() -> None:
+    chain = FallbackChain(providers={})
+
+    with pytest.raises(ValueError) as exc:
+        await chain.generate("prompt", schema=None, primary_backend="mistral")
+
+    assert "Aucun provider" in str(exc.value)
+
+
 # T4 : sequence symetrique. Si primary=ollama et ollama down -> bascule mistral.
 
 

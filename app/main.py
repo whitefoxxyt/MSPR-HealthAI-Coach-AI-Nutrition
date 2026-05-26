@@ -1,14 +1,19 @@
+import logging
 import os
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
 from app.limiter import limiter
 from app.routers import health, me, meal_analysis, meal_plan, nutrition_goals
+
+logger = logging.getLogger(__name__)
 
 # CORS : origines front autorisees (dev local + container front).
 # Liste configurable via CORS_ALLOW_ORIGINS (separe par virgules).
@@ -22,6 +27,17 @@ _cors_origins = [
 ]
 
 
+def _cors_headers_for(request: Request) -> dict[str, str]:
+    """Retourne les headers CORS si l'origine du request est autorisee."""
+    origin = request.headers.get("origin", "")
+    if origin in _cors_origins:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
+    return {}
+
+
 def _rate_limit_handler_with_cors(request: Request, exc: RateLimitExceeded) -> Response:
     """Wrapper du handler slowapi qui ajoute les headers CORS sur la 429.
 
@@ -30,11 +46,37 @@ def _rate_limit_handler_with_cors(request: Request, exc: RateLimitExceeded) -> R
     la vraie cause au front.
     """
     response = _rate_limit_exceeded_handler(request, exc)
-    origin = request.headers.get("origin", "")
-    if origin in _cors_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers.update(_cors_headers_for(request))
     return response
+
+
+async def _http_exception_handler_with_cors(
+    request: Request, exc: StarletteHTTPException
+) -> Response:
+    """Handler pour HTTPException : conserve status/detail et ajoute CORS."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=_cors_headers_for(request),
+    )
+
+
+async def _unhandled_exception_handler_with_cors(
+    request: Request, exc: Exception
+) -> Response:
+    """Handler global pour les exceptions non capturees : 500 JSON avec CORS.
+
+    Sans ce handler, une exception levee dans un endpoint (ex. ValueError du
+    FallbackChain quand aucun provider LLM n'est dispo) remonte jusqu'a Starlette
+    qui renvoie une 500 sans les headers CORS. Le front voit un erreur CORS au
+    lieu de la vraie cause.
+    """
+    logger.exception("Unhandled exception during %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers=_cors_headers_for(request),
+    )
 
 API_DESCRIPTION = """
 Micro-service d'analyse nutritionnelle et de generation de plans repas par IA, partie de la plateforme MSPR HealthAI Coach.
@@ -83,6 +125,8 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler_with_cors)
+app.add_exception_handler(StarletteHTTPException, _http_exception_handler_with_cors)
+app.add_exception_handler(Exception, _unhandled_exception_handler_with_cors)
 app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(

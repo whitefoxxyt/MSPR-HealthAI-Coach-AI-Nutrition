@@ -28,15 +28,17 @@ class FallbackChain:
         primary_backend: str,
     ) -> tuple[str, str]:
         if primary_backend not in self._providers:
-            # Misconfiguration typique : LLM_BACKEND=mistral mais MISTRAL_API_KEY
-            # vide -> build_default_chain n'a ajoute qu'Ollama. On preferera un
-            # ValueError explicite a un KeyError opaque cote orchestrator.
-            available = sorted(self._providers)
-            raise ValueError(
-                f"Backend primaire {primary_backend!r} indisponible dans le chain. "
-                f"Providers disponibles : {available}. "
-                f"Verifie LLM_BACKEND et MISTRAL_API_KEY."
-            )
+            # Misconfiguration typique : DEFAULT_LLM=mistral mais MISTRAL_API_KEY
+            # vide -> build_default_chain n'a ajoute qu'Ollama. CLAUDE.md promet
+            # une bascule automatique vers le provider restant ; on respecte ce
+            # contrat plutot que de remonter une erreur opaque.
+            if not self._providers:
+                raise ValueError(
+                    "Aucun provider LLM disponible (verifie OLLAMA_HOST / MISTRAL_API_KEY)."
+                )
+            fallback = next(iter(self._providers))
+            content = await self._providers[fallback].generate(prompt, schema)
+            return content, fallback
         try:
             content = await self._providers[primary_backend].generate(prompt, schema)
             return content, primary_backend
