@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.data import portion_sizes, recommendations_matrix as matrix
 from app.db.models import MealAnalysis, NutritionGoal
 from app.models.schemas import (
@@ -21,6 +22,7 @@ from app.models.schemas import (
 )
 from app.services import llm_client
 from app.services.food_classifier import classify_image
+from app.services.mistral_vision import classify_image_vision
 from app.services.image_thumbnail import to_data_url
 from app.services.imbalance_detector import detect, imbalance_to_text
 from app.services.nutrition_engine import (
@@ -47,6 +49,25 @@ _NUTRIENT_TO_MATRIX_KEY: dict[tuple[Nutrient, ImbalanceStatus], matrix.Imbalance
 }
 
 
+async def _classify(image_bytes: bytes) -> list[tuple[str, float]]:
+    """Classifie l'image via le backend configure, avec repli sur Food-101.
+
+    mistral_vision : meilleure reconnaissance et multi-aliments, contrainte au
+    catalogue Food-101 (macros toujours ancrees sur la BDD/PNNS). En cas d'echec
+    (API indisponible, cle absente, aucun aliment), repli sur le classifieur
+    HuggingFace local.
+    """
+    if settings.analyze_backend == "mistral_vision":
+        try:
+            preds = await classify_image_vision(image_bytes)
+            if preds:
+                return preds
+            _LOGGER.warning("Mistral vision : aucun aliment detecte, repli Food-101")
+        except Exception:
+            _LOGGER.exception("Mistral vision indisponible, repli Food-101")
+    return await asyncio.to_thread(classify_image, image_bytes)
+
+
 async def analyze_meal(
     image_bytes: bytes,
     user_id: str,
@@ -54,9 +75,10 @@ async def analyze_meal(
     meal_type: MealType | None = None,
 ) -> dict[str, Any]:
     """Pipeline complet : classification, lookup, tags, LLM synthetique, persistance."""
-    # 1. Classification HuggingFace (CPU-bound -> thread pool).
+    # 1. Classification : Mistral vision (contrainte au catalogue) ou Food-101
+    #    selon settings.analyze_backend, avec repli sur Food-101.
     try:
-        predictions = await asyncio.to_thread(classify_image, image_bytes)
+        predictions = await _classify(image_bytes)
     except Exception as exc:
         raise HTTPException(
             status_code=422, detail="Image invalide ou corrompue."
@@ -74,8 +96,7 @@ async def analyze_meal(
 
     # 3. Tailles de portion PNNS + macros recalculees pour chaque aliment.
     serving_sizes_by_food = [
-        _serving_sizes_for(item["label"], item["nutrition"])
-        for item in detected_foods
+        _serving_sizes_for(item["label"], item["nutrition"]) for item in detected_foods
     ]
 
     # 4. Macros du repas : portion medium de l'aliment le plus probable.
@@ -326,9 +347,7 @@ def _serving_sizes_for(
     ]
 
 
-def _scale_macros(
-    nutrition: dict[str, Any] | None, grams: int
-) -> dict[str, float]:
+def _scale_macros(nutrition: dict[str, Any] | None, grams: int) -> dict[str, float]:
     """nutrition_entries stocke les valeurs pour 100 g (convention OFF/USDA)."""
     if not nutrition:
         return {}

@@ -175,6 +175,11 @@ _FOOD101_TO_PNNS_CATEGORY: dict[str, str] = {
     "waffles": "desserts",
 }
 
+# Catalogue des labels Food-101 reconnus (cles du mapping ci-dessus). Sert a
+# contraindre la vision Mistral aux memes labels que le classifieur local, pour
+# garder les macros ancrees sur la BDD/PNNS.
+FOOD101_LABELS: tuple[str, ...] = tuple(_FOOD101_TO_PNNS_CATEGORY)
+
 
 def get_serving_sizes(food_label: str) -> list[ServingSize]:
     category = _FOOD101_TO_PNNS_CATEGORY.get(food_label)

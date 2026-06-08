@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     mistral_api_key: str = ""
     mistral_model: str = "mistral-small-latest"
     mistral_base_url: str = "https://api.mistral.ai/v1"
+    # Backend de classification photo (/analyze-meal). "food101" = classifieur
+    # HuggingFace local (defaut historique valide). "mistral_vision" = vision
+    # Mistral contrainte au catalogue Food-101 (meilleure reconnaissance,
+    # multi-aliments), avec repli automatique sur food101 en cas d'echec.
+    analyze_backend: Literal["food101", "mistral_vision"] = "food101"
+    mistral_vision_model: str = "pixtral-12b-2409"
 
     @property
     def database_url(self) -> str:
