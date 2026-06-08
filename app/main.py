@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -142,3 +143,6 @@ app.include_router(meal_analysis.router, prefix="/api/v1")
 app.include_router(meal_plan.router, prefix="/api/v1")
 app.include_router(nutrition_goals.router, prefix="/api/v1")
 app.include_router(me.router, prefix="/api/v1")
+
+# Instrumentation Prometheus : expose /metrics (exclu du schema OpenAPI).
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
