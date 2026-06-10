@@ -39,6 +39,7 @@ class OllamaProvider(LLMProvider):
         num_predict: int | None = _OLLAMA_DEFAULT_NUM_PREDICT,
         num_ctx: int | None = None,
         temperature: float | None = None,
+        num_gpu: int | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
@@ -46,6 +47,7 @@ class OllamaProvider(LLMProvider):
         self._num_predict = num_predict
         self._num_ctx = num_ctx
         self._temperature = temperature
+        self._num_gpu = num_gpu
 
     async def generate(self, prompt: str, schema: dict[str, Any] | None) -> str:
         payload: dict[str, Any] = {
@@ -62,6 +64,8 @@ class OllamaProvider(LLMProvider):
             options["num_ctx"] = self._num_ctx
         if self._temperature is not None:
             options["temperature"] = self._temperature
+        if self._num_gpu is not None:
+            options["num_gpu"] = self._num_gpu
         if options:
             payload["options"] = options
         async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -127,6 +131,7 @@ def get_provider(name: str | None = None) -> LLMProvider:
             model=settings.ollama_model,
             num_ctx=settings.ollama_num_ctx,
             temperature=settings.ollama_temperature,
+            num_gpu=settings.ollama_num_gpu,
         )
     if backend == "mistral":
         if not settings.mistral_api_key:

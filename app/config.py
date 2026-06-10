@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     ollama_model: str = "gemma3:4b"
     ollama_num_ctx: int = 8192
     ollama_temperature: float = 0.2
+    # Nombre de couches offloadees sur GPU, envoye a Ollama quand defini
+    # (None = estimation automatique). Sur la Quadro P1000 4 Go du serveur,
+    # l'auto-estimation ne place que ~1 Go en VRAM (split 81 % CPU) alors que
+    # num_gpu=99 charge le modele entier (2.8 Go mesures, 100 % GPU).
+    ollama_num_gpu: int | None = None
     better_auth_secret: str = ""
     auth_api_url: str = "http://mspr-healthai-auth:3000"
     # Toggle few-shot prompting (slice 9). Mis a false uniquement pour l'eval

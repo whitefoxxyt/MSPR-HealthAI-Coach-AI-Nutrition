@@ -285,6 +285,7 @@ async def _call_ollama_generate(prompt: str, json_schema: dict[str, Any] | None)
         num_predict=None,
         num_ctx=settings.ollama_num_ctx,
         temperature=settings.ollama_temperature,
+        num_gpu=settings.ollama_num_gpu,
     )
     return await provider.generate(prompt, json_schema)
 

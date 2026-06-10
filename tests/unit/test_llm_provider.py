@@ -89,6 +89,7 @@ async def test_ollama_provider_sends_inference_options(
         model="gemma3:12b",
         num_ctx=8192,
         temperature=0.2,
+        num_gpu=99,
     )
 
     await provider.generate("question", schema=None)
@@ -99,6 +100,7 @@ async def test_ollama_provider_sends_inference_options(
         "num_predict": 2048,
         "num_ctx": 8192,
         "temperature": 0.2,
+        "num_gpu": 99,
     }
 
 
@@ -112,6 +114,7 @@ async def test_get_provider_ollama_wires_settings_inference_options(
     monkeypatch.setattr(config.settings, "ollama_model", "qwen2.5:3b")
     monkeypatch.setattr(config.settings, "ollama_num_ctx", 4096)
     monkeypatch.setattr(config.settings, "ollama_temperature", 0.5)
+    monkeypatch.setattr(config.settings, "ollama_num_gpu", 24)
     route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
         200, json=_ollama_response("ok")
     )
@@ -123,6 +126,7 @@ async def test_get_provider_ollama_wires_settings_inference_options(
     assert body["model"] == "qwen2.5:3b"
     assert body["options"]["num_ctx"] == 4096
     assert body["options"]["temperature"] == 0.5
+    assert body["options"]["num_gpu"] == 24
 
 
 @pytest.mark.asyncio
