@@ -85,7 +85,12 @@ async def analyze_meal(
         ) from exc
     if not predictions:
         raise HTTPException(
-            status_code=422, detail="Aucun aliment detecte avec un score suffisant."
+            status_code=422,
+            detail=(
+                "Aucun aliment reconnu sur cette photo. Le modele identifie des "
+                "plats prepares (catalogue Food-101) : cadre le plat de pres, "
+                "bien eclaire, et reessaie."
+            ),
         )
 
     # 2. Lookup nutrition pour chaque aliment detecte. Le marqueur source=static
