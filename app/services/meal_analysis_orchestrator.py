@@ -114,10 +114,12 @@ async def analyze_meal(
         _serving_sizes_for(item["label"], item["nutrition"]) for item in detected_foods
     ]
 
-    # 4. Macros du repas : portion medium de l'aliment le plus probable.
-    # Slice 8 : la suggestion LLM est generee sur cette portion (la plus probable).
+    # 4. Macros du repas : portion medium du premier aliment qui possede des
+    # valeurs nutritionnelles. Avant : strictement le top-1, qui pouvait etre
+    # sans nutrition et laissait des macros vides alors qu'un autre aliment
+    # detecte en avait.
     top_label = predictions[0][0]
-    macros = _medium_portion_macros(serving_sizes_by_food[0])
+    macros_index, macros = _select_meal_macros(serving_sizes_by_food)
 
     # 5. Profil + objectif sante.
     goal = (
@@ -127,6 +129,11 @@ async def analyze_meal(
     user_profile = build_user_profile(goal)
 
     warnings = _build_warnings(meal_type, estimated_labels, missing_labels)
+    if macros_index != 0:
+        warnings.append(
+            f"Macros calculees sur {detected_foods[macros_index]['label']} "
+            f"(pas de valeurs nutritionnelles pour {top_label})"
+        )
 
     # Thumbnail data URL pour affichage dans l'historique. Calcul une fois,
     # reutilisee dans les deux branches de persistance.
@@ -338,6 +345,17 @@ def _persist_analysis(
 
 
 _MEAL_TYPE_FALLBACK_WARNING = "meal_type non specifie, fallback TDEE/4"
+
+
+def _select_meal_macros(
+    serving_sizes_by_food: list[list[dict]],
+) -> tuple[int, dict[str, float]]:
+    """Index et macros (portion medium) du premier aliment qui en possede."""
+    for i, portions in enumerate(serving_sizes_by_food):
+        macros = _medium_portion_macros(portions)
+        if macros:
+            return i, macros
+    return 0, {}
 
 
 def _build_warnings(
