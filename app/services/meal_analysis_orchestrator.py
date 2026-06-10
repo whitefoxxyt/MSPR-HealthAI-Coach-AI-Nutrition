@@ -31,6 +31,7 @@ from app.services.nutrition_engine import (
     build_user_profile,
 )
 from app.services.nutrition_lookup import lookup_nutrition
+from app.services.user_preferences_service import get_preferences
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -192,7 +193,7 @@ async def analyze_meal(
             fallback_used = False
         else:
             recommendations, fallback_used = await _generate_recommendation(
-                tags, health_goal, db
+                tags, health_goal, db, user_id
             )
 
     # 9. Persistance. Hash NULL en mode fallback (un appel ulterieur retentera le LLM).
@@ -275,13 +276,19 @@ async def _generate_recommendation(
     tags: list[ImbalanceTag],
     health_goal: HealthGoal,
     db: Session,
+    user_id: str | None = None,
 ) -> tuple[list[str], bool]:
-    """Appelle generate_recommendation (1 seul appel Ollama).
+    """Appelle generate_recommendation (1 seul appel LLM, chain multi-provider).
 
-    fallback_used = True si la matrice statique a ete utilisee. La phrase
-    retournee est unique : le LLM la synthetise, ou la matrice la concatene.
+    Le backend primaire respecte la preference utilisateur, comme les plans
+    repas. fallback_used = True si la matrice statique a ete utilisee. La
+    phrase retournee est unique : le LLM la synthetise, ou la matrice la
+    concatene.
     """
     fallback_used = False
+    primary_backend: str | None = None
+    if user_id is not None:
+        primary_backend = get_preferences(user_id, db).effective_llm.value
 
     def _matrix_fallback(tag_list: list[ImbalanceTag], goal: HealthGoal) -> str:
         nonlocal fallback_used
@@ -305,6 +312,7 @@ async def _generate_recommendation(
         health_goal=health_goal,
         db=db,
         fallback=_matrix_fallback,
+        primary_backend=primary_backend,
     )
     if not suggestion:
         return [], fallback_used

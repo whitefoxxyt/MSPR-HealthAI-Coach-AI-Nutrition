@@ -6,7 +6,7 @@ import logging
 import httpx
 
 from app.config import settings
-from app.data.portion_sizes import FOOD101_LABELS
+from app.data.portion_sizes import VISION_LABELS
 from app.services.image_thumbnail import to_data_url
 
 _LOGGER = logging.getLogger(__name__)
@@ -15,7 +15,8 @@ _TIMEOUT_S = 60.0
 _DEFAULT_CONFIDENCE_THRESHOLD = 0.10
 
 # Sortie JSON attendue. La contrainte au catalogue est rappelee dans le prompt
-# ET reverifiee en code (filtrage sur FOOD101_LABELS) : on ne depend pas du mode
+# ET reverifiee en code (filtrage sur VISION_LABELS, Food-101 + aliments
+# simples) : on ne depend pas du mode
 # strict sur un enum de 101 valeurs.
 _RESPONSE_SCHEMA = {
     "type": "object",
@@ -39,7 +40,7 @@ _RESPONSE_SCHEMA = {
 
 
 def _build_prompt() -> str:
-    catalogue = ", ".join(FOOD101_LABELS)
+    catalogue = ", ".join(VISION_LABELS)
     return (
         "Tu es un classifieur d'aliments. Regarde la photo et identifie le ou "
         "les aliments presents, en te limitant STRICTEMENT a cette liste de "
@@ -107,7 +108,7 @@ async def classify_image_vision(
     content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
     parsed = json.loads(content)
 
-    valid = set(FOOD101_LABELS)
+    valid = set(VISION_LABELS)
     seen: set[str] = set()
     results: list[tuple[str, float]] = []
     for food in parsed.get("foods", []):

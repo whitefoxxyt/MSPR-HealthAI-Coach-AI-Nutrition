@@ -41,6 +41,11 @@ async def generate(
 
     plan_inputs = _build_inputs(user_id, request, health_goal)
     backend = get_preferences(user_id, db).effective_llm.value
+    inputs_hash = compute_inputs_hash(plan_inputs)
+
+    # Snapshot avant generation : si le dernier plan (user, hash) est le meme
+    # apres l'appel, generate_plan a servi le cache sans rien persister.
+    previous_meta = _latest_plan_meta(db, user_id, inputs_hash)
 
     plan, compliance_status, compliance_warnings = await generate_plan(
         plan_inputs,
@@ -50,7 +55,13 @@ async def generate(
         primary_backend=backend,
     )
 
-    plan_id = _latest_plan_id(db, user_id, compute_inputs_hash(plan_inputs))
+    meta = _latest_plan_meta(db, user_id, inputs_hash)
+    if meta is None:
+        # generate_plan persiste systematiquement (success / fallback / cache hit).
+        # Si on arrive ici c'est une erreur de logique amont.
+        raise RuntimeError("plan persiste introuvable apres generate_plan")
+    plan_id, llm_backend_used = meta
+    from_cache = previous_meta is not None and previous_meta[0] == plan_id
     db.commit()
 
     return MealPlanResponse(
@@ -59,6 +70,8 @@ async def generate(
         days=plan.days,
         compliance_status=compliance_status.value,
         compliance_warnings=compliance_warnings,
+        llm_backend_used=llm_backend_used,
+        from_cache=from_cache,
     )
 
 
@@ -91,25 +104,26 @@ def _build_inputs(
     )
 
 
-def _latest_plan_id(db: Session, user_id: str, inputs_hash: str) -> int:
-    """Recupere l'id du plan que generate_plan vient de persister ou de servir du cache.
+def _latest_plan_meta(
+    db: Session, user_id: str, inputs_hash: str
+) -> tuple[int, str | None] | None:
+    """(id, llm_backend_used) du dernier plan pour (user, hash), ou None.
 
     Pas de filtre par backend : si le fallback chain a kick in (Mistral KO ->
     Ollama OK), la ligne porte llm_backend_used du secondaire effectivement
     utilise alors que le caller connait le primaire demande. La cle naturelle
     "latest pour (user, hash)" suffit puisque generate_plan vient juste de
-    persister cette ligne.
+    persister cette ligne. Appelee avant ET apres generate_plan : un id
+    identique signifie que le cache a servi sans nouvelle persistance.
     """
     row = db.execute(
         text(
-            "SELECT id FROM meal_plans "
+            "SELECT id, llm_backend_used FROM meal_plans "
             "WHERE user_id = :uid AND inputs_hash = :h "
             "ORDER BY generated_at DESC LIMIT 1"
         ),
         {"uid": user_id, "h": inputs_hash},
     ).fetchone()
     if row is None:
-        # generate_plan persiste systematiquement (success / fallback / cache hit).
-        # Si on arrive ici c'est une erreur de logique amont.
-        raise RuntimeError("plan persiste introuvable apres generate_plan")
-    return int(row.id)
+        return None
+    return int(row.id), row.llm_backend_used

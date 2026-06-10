@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 import httpx
 from pydantic import ValidationError
@@ -25,10 +25,7 @@ from app.services.decrim_retry_orchestrator import (
     InfeasibleConstraintsError,
     generate_with_retry,
 )
-from app.services.fallback_chain import format_fallback_warning
-from app.services.llm_provider import OllamaProvider
-
-T = TypeVar("T")
+from app.services.fallback_chain import build_default_chain, format_fallback_warning
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +33,6 @@ _LOGGER = logging.getLogger(__name__)
 # le nombre de coroutines qui appellent generate_plan.
 _OLLAMA_SEMAPHORE = asyncio.Semaphore(2)
 
-_OLLAMA_TIMEOUT_S = 30.0
 _MAX_ATTEMPTS = 3  # 1 essai initial + 2 retries (flakiness Ollama)
 _RETRY_BACKOFF_S = 0.5  # backoff exponentiel : 0.5s, 1.0s entre retries
 
@@ -166,12 +162,16 @@ async def generate_recommendation(
     health_goal: HealthGoal,
     db: Session,  # noqa: ARG001 (reservee pour cache cote orchestrator)
     fallback: Callable[[list[ImbalanceTag], HealthGoal], str] | None = None,
+    primary_backend: str | None = None,
 ) -> str:
     """Genere une recommandation synthetique unique pour l'ensemble des imbalances.
 
-    Issue #51 : un seul appel Ollama, prompt couvrant toutes les imbalances et
-    l'objectif sante. Le cache est gere par meal_analysis_orchestrator (cle :
-    hash de top_label + health_goal + imbalances triees).
+    Issue #51 : un seul appel LLM, prompt couvrant toutes les imbalances et
+    l'objectif sante. Passe par la FallbackChain multi-provider comme les
+    plans repas (Mistral ~2 s en primaire quand configure, repli Ollama)
+    au lieu du chemin Ollama-only historique (~45 s par analyse sur CPU).
+    Le cache est gere par meal_analysis_orchestrator (cle : hash de
+    top_label + health_goal + imbalances triees).
     """
     if not ctx_list:
         return ""
@@ -184,17 +184,34 @@ async def generate_recommendation(
         + f":{health_goal.value}"
     )
 
-    try:
-        return await _attempt_with_retry(
-            prompt=prompt,
-            json_schema=None,
-            parse=_parse_text_response,
-            log_id=log_id,
-        )
-    except _OllamaCallFailed:
-        if fallback is not None:
-            return fallback(sorted_tags, health_goal)
-        return _RECO_DEFAULT_FALLBACK
+    chain = build_default_chain()
+    primary = primary_backend or settings.default_llm
+    last_error: Exception | None = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        start = time.monotonic()
+        try:
+            # Le semaphore protege le repli Ollama du chain (2 inferences max),
+            # sans effet notable sur l'API managee Mistral.
+            async with _OLLAMA_SEMAPHORE:
+                raw, _backend_used = await chain.generate(prompt, None, primary)
+            text_reco = _parse_text_response(raw)
+            _log_call(log_id, start, attempt, "success")
+            return text_reco
+        except (httpx.HTTPError, _PlanValidationError, ValueError) as exc:
+            last_error = exc
+            status = "retry" if attempt < _MAX_ATTEMPTS else "fallback"
+            _log_call(log_id, start, attempt, status, error=str(exc))
+            if attempt < _MAX_ATTEMPTS:
+                await asyncio.sleep(_RETRY_BACKOFF_S * (2 ** (attempt - 1)))
+
+    _LOGGER.warning(
+        "llm_client : recommandation en repli statique (log_id=%s) : %s",
+        log_id,
+        last_error,
+    )
+    if fallback is not None:
+        return fallback(sorted_tags, health_goal)
+    return _RECO_DEFAULT_FALLBACK
 
 
 def _tag_sort_key(tag: ImbalanceTag) -> tuple[str, str]:
@@ -217,51 +234,11 @@ def _build_recommendation_prompt(
     )
 
 
-# Internes : Ollama, validation, cache, fallback
-
-
-class _OllamaCallFailed(Exception):
-    """Levee apres _MAX_ATTEMPTS echecs : signal pour basculer en fallback."""
+# Internes : validation, cache, fallback
 
 
 class _PlanValidationError(Exception):
     """Levee quand un plan viole une regle metier (allergie presente, JSON invalide)."""
-
-
-async def _attempt_with_retry(
-    prompt: str,
-    json_schema: dict[str, Any] | None,
-    parse: Callable[[str], T],
-    log_id: str,
-) -> T:
-    """Boucle retry + semaphore pour generate_recommendation.
-
-    generate_plan delegue desormais a decrim_retry_orchestrator et n'utilise
-    plus cette helper. Conservee pour les recommandations textuelles libres.
-    """
-    last_error: Exception | None = None
-    for attempt in range(1, _MAX_ATTEMPTS + 1):
-        start = time.monotonic()
-        try:
-            async with _OLLAMA_SEMAPHORE:
-                raw = await _call_ollama_generate(prompt, json_schema)
-            result = parse(raw)
-            _log_call(log_id, start, attempt, "success")
-            return result
-        except (httpx.HTTPError, ValidationError, _PlanValidationError) as exc:
-            last_error = exc
-            status = "retry" if attempt < _MAX_ATTEMPTS else "fallback"
-            _log_call(log_id, start, attempt, status, error=str(exc))
-            if attempt < _MAX_ATTEMPTS:
-                # Backoff exponentiel : 0.5s, 1.0s. Laisse Ollama respirer.
-                await asyncio.sleep(_RETRY_BACKOFF_S * (2 ** (attempt - 1)))
-    _LOGGER.warning(
-        "llm_client : echec apres %d tentatives (log_id=%s) : %s",
-        _MAX_ATTEMPTS,
-        log_id,
-        last_error,
-    )
-    raise _OllamaCallFailed(str(last_error)) from last_error
 
 
 def _parse_text_response(raw: str) -> str:
@@ -269,25 +246,6 @@ def _parse_text_response(raw: str) -> str:
     if not text_reco:
         raise _PlanValidationError("reponse vide.")
     return text_reco
-
-
-async def _call_ollama_generate(prompt: str, json_schema: dict[str, Any] | None) -> str:
-    """Genere une recommandation textuelle via OllamaProvider.
-
-    Config dediee : timeout court (30s, recos rapides) et pas de num_predict
-    (les recos sont courtes, on laisse Ollama gerer sa terminaison). Cette
-    path reste Ollama-only ; le selecteur multi-provider concerne le plan repas.
-    """
-    provider = OllamaProvider(
-        base_url=settings.ollama_host,
-        model=settings.ollama_model,
-        timeout=_OLLAMA_TIMEOUT_S,
-        num_predict=None,
-        num_ctx=settings.ollama_num_ctx,
-        temperature=settings.ollama_temperature,
-        num_gpu=settings.ollama_num_gpu,
-    )
-    return await provider.generate(prompt, json_schema)
 
 
 def _build_compliance_warnings(

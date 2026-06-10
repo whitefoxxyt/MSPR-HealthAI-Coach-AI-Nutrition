@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import pytest
 
-from app.data.food101_macros import FOOD101_MACROS, static_nutrition_for
-from app.data.portion_sizes import _FOOD101_TO_PNNS_CATEGORY
+from app.data.food101_macros import (
+    EXTRA_VISION_MACROS,
+    FOOD101_MACROS,
+    static_nutrition_for,
+)
+from app.data.portion_sizes import (
+    _EXTRA_VISION_FOODS,
+    _FOOD101_TO_PNNS_CATEGORY,
+    VISION_LABELS,
+    get_serving_sizes,
+)
 
 _MACRO_KEYS = ("calories", "protein_g", "carbs_g", "fat_g", "fiber_g")
 
@@ -47,3 +56,18 @@ def test_static_nutrition_for_marque_la_source() -> None:
 
 def test_static_nutrition_for_label_inconnu() -> None:
     assert static_nutrition_for("plat_inconnu") is None
+
+
+def test_catalogue_vision_etendu_coherent() -> None:
+    # Chaque aliment simple du catalogue vision a ses macros statiques, sa
+    # categorie PNNS de portions, et figure dans VISION_LABELS.
+    assert set(_EXTRA_VISION_FOODS) == set(EXTRA_VISION_MACROS)
+    assert set(VISION_LABELS) == set(_FOOD101_TO_PNNS_CATEGORY) | set(_EXTRA_VISION_FOODS)
+    for label in _EXTRA_VISION_FOODS:
+        portions = get_serving_sizes(label)
+        assert portions, label
+        nutrition = static_nutrition_for(label)
+        assert nutrition is not None, label
+        assert nutrition["source"] == "static"
+        for key in _MACRO_KEYS:
+            assert isinstance(nutrition[key], float), (label, key)

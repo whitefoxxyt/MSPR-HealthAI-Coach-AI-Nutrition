@@ -817,9 +817,184 @@ FOOD101_MACROS: dict[str, dict[str, float | str]] = {
 }
 
 
+# Macros des aliments simples du catalogue vision etendu (hors Food-101),
+# valeurs pour 100 g. Voir portion_sizes._EXTRA_VISION_FOODS pour les
+# categories PNNS associees.
+EXTRA_VISION_MACROS: dict[str, dict[str, float | str]] = {
+    "apple": {
+        "food_name": "Apple",
+        "calories": 52.0,
+        "protein_g": 0.3,
+        "carbs_g": 14.0,
+        "fat_g": 0.2,
+        "fiber_g": 2.4,
+    },
+    "banana": {
+        "food_name": "Banana",
+        "calories": 89.0,
+        "protein_g": 1.1,
+        "carbs_g": 23.0,
+        "fat_g": 0.3,
+        "fiber_g": 2.6,
+    },
+    "orange": {
+        "food_name": "Orange",
+        "calories": 47.0,
+        "protein_g": 0.9,
+        "carbs_g": 12.0,
+        "fat_g": 0.1,
+        "fiber_g": 2.4,
+    },
+    "pear": {
+        "food_name": "Pear",
+        "calories": 57.0,
+        "protein_g": 0.4,
+        "carbs_g": 15.0,
+        "fat_g": 0.1,
+        "fiber_g": 3.1,
+    },
+    "grapes": {
+        "food_name": "Grapes",
+        "calories": 69.0,
+        "protein_g": 0.7,
+        "carbs_g": 18.0,
+        "fat_g": 0.2,
+        "fiber_g": 0.9,
+    },
+    "strawberries": {
+        "food_name": "Strawberries",
+        "calories": 32.0,
+        "protein_g": 0.7,
+        "carbs_g": 7.7,
+        "fat_g": 0.3,
+        "fiber_g": 2.0,
+    },
+    "pineapple": {
+        "food_name": "Pineapple",
+        "calories": 50.0,
+        "protein_g": 0.5,
+        "carbs_g": 13.0,
+        "fat_g": 0.1,
+        "fiber_g": 1.4,
+    },
+    "watermelon": {
+        "food_name": "Watermelon",
+        "calories": 30.0,
+        "protein_g": 0.6,
+        "carbs_g": 7.6,
+        "fat_g": 0.2,
+        "fiber_g": 0.4,
+    },
+    "mango": {
+        "food_name": "Mango",
+        "calories": 60.0,
+        "protein_g": 0.8,
+        "carbs_g": 15.0,
+        "fat_g": 0.4,
+        "fiber_g": 1.6,
+    },
+    "kiwi": {
+        "food_name": "Kiwi",
+        "calories": 61.0,
+        "protein_g": 1.1,
+        "carbs_g": 14.7,
+        "fat_g": 0.5,
+        "fiber_g": 3.0,
+    },
+    "peach": {
+        "food_name": "Peach",
+        "calories": 39.0,
+        "protein_g": 0.9,
+        "carbs_g": 9.5,
+        "fat_g": 0.3,
+        "fiber_g": 1.5,
+    },
+    "orange_juice": {
+        "food_name": "Orange juice",
+        "calories": 45.0,
+        "protein_g": 0.7,
+        "carbs_g": 10.4,
+        "fat_g": 0.2,
+        "fiber_g": 0.2,
+    },
+    "coffee": {
+        "food_name": "Coffee (black)",
+        "calories": 2.0,
+        "protein_g": 0.1,
+        "carbs_g": 0.0,
+        "fat_g": 0.0,
+        "fiber_g": 0.0,
+    },
+    "yogurt": {
+        "food_name": "Yogurt (plain)",
+        "calories": 61.0,
+        "protein_g": 3.5,
+        "carbs_g": 4.7,
+        "fat_g": 3.3,
+        "fiber_g": 0.0,
+    },
+    "muffin": {
+        "food_name": "Muffin",
+        "calories": 380.0,
+        "protein_g": 5.5,
+        "carbs_g": 50.0,
+        "fat_g": 17.5,
+        "fiber_g": 1.5,
+    },
+    "cookies": {
+        "food_name": "Cookies",
+        "calories": 480.0,
+        "protein_g": 5.5,
+        "carbs_g": 64.0,
+        "fat_g": 22.0,
+        "fiber_g": 2.0,
+    },
+    "candy": {
+        "food_name": "Candy",
+        "calories": 390.0,
+        "protein_g": 0.0,
+        "carbs_g": 97.0,
+        "fat_g": 0.2,
+        "fiber_g": 0.0,
+    },
+    "chocolate_bar": {
+        "food_name": "Chocolate bar",
+        "calories": 535.0,
+        "protein_g": 7.5,
+        "carbs_g": 59.0,
+        "fat_g": 30.0,
+        "fiber_g": 3.4,
+    },
+    "sandwich": {
+        "food_name": "Sandwich",
+        "calories": 240.0,
+        "protein_g": 11.0,
+        "carbs_g": 28.0,
+        "fat_g": 9.5,
+        "fiber_g": 1.8,
+    },
+    "cereal_bowl": {
+        "food_name": "Cereal bowl with milk",
+        "calories": 150.0,
+        "protein_g": 4.5,
+        "carbs_g": 27.0,
+        "fat_g": 3.0,
+        "fiber_g": 2.0,
+    },
+    "almonds": {
+        "food_name": "Almonds",
+        "calories": 579.0,
+        "protein_g": 21.0,
+        "carbs_g": 22.0,
+        "fat_g": 50.0,
+        "fiber_g": 12.5,
+    },
+}
+
+
 def static_nutrition_for(label: str) -> dict | None:
     """Retourne les macros statiques d'un label, marquees source=static, ou None."""
-    entry = FOOD101_MACROS.get(label)
+    entry = FOOD101_MACROS.get(label) or EXTRA_VISION_MACROS.get(label)
     if entry is None:
         return None
     return {**entry, "source": "static"}

@@ -1315,6 +1315,22 @@
             },
             "type": "array",
             "title": "Compliance Warnings"
+          },
+          "llm_backend_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Backend Used"
+          },
+          "from_cache": {
+            "type": "boolean",
+            "title": "From Cache",
+            "default": false
           }
         },
         "type": "object",

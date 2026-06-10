@@ -180,9 +180,43 @@ _FOOD101_TO_PNNS_CATEGORY: dict[str, str] = {
 # garder les macros ancrees sur la BDD/PNNS.
 FOOD101_LABELS: tuple[str, ...] = tuple(_FOOD101_TO_PNNS_CATEGORY)
 
+# Aliments simples hors Food-101, reconnus uniquement par la vision Mistral
+# (le classifieur local reste contraint aux 101 classes). Une pomme ou un
+# yaourt declenchaient un 422 "aucun aliment reconnu" : ces labels etendent
+# le catalogue vision avec leur categorie PNNS pour les portions. Leurs
+# macros vivent dans food101_macros.EXTRA_VISION_MACROS.
+_EXTRA_VISION_FOODS: dict[str, str] = {
+    "apple": "fruits",
+    "banana": "fruits",
+    "orange": "fruits",
+    "pear": "fruits",
+    "grapes": "fruits",
+    "strawberries": "fruits",
+    "pineapple": "fruits",
+    "watermelon": "fruits",
+    "mango": "fruits",
+    "kiwi": "fruits",
+    "peach": "fruits",
+    "orange_juice": "boissons",
+    "coffee": "boissons",
+    "yogurt": "desserts",
+    "muffin": "desserts",
+    "cookies": "desserts",
+    "candy": "desserts",
+    "chocolate_bar": "desserts",
+    "sandwich": "plats_composes",
+    "cereal_bowl": "feculents",
+    "almonds": "oleagineux",
+}
+
+# Catalogue complet propose a la vision Mistral.
+VISION_LABELS: tuple[str, ...] = FOOD101_LABELS + tuple(_EXTRA_VISION_FOODS)
+
 
 def get_serving_sizes(food_label: str) -> list[ServingSize]:
-    category = _FOOD101_TO_PNNS_CATEGORY.get(food_label)
+    category = _FOOD101_TO_PNNS_CATEGORY.get(food_label) or _EXTRA_VISION_FOODS.get(
+        food_label
+    )
     if category is None:
         return [
             ServingSize(label=ServingSizeLabel.medium, grams=100, description="100 g")

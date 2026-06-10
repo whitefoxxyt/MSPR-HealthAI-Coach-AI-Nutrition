@@ -178,6 +178,11 @@ class MealPlanResponse(BaseModel):
     # static_fallback: bascule sur le plan statique (LLM infaisable ou injoignable).
     compliance_status: Literal["full", "partial_budget", "static_fallback"] = "full"
     compliance_warnings: list[str] = Field(default_factory=list)
+    # Transparence generation : backend LLM reellement utilise (peut differer
+    # du primaire si la chain a bascule) et plan servi depuis le cache 7 j
+    # (tier free : memes parametres -> meme plan, pas de regeneration).
+    llm_backend_used: str | None = None
+    from_cache: bool = False
 
 
 class MealPlanHistoryItem(BaseModel):
