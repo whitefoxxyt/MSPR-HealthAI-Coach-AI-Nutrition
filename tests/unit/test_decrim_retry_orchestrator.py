@@ -91,6 +91,28 @@ def test_build_plan_prompt_includes_few_shot_block_before_generation_instruction
     assert generate_idx > examples_idx
 
 
+def test_build_plan_prompt_full_examples_includes_all_days(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import config
+
+    inputs = PlanInputs(user_id="42", objective="balance", duration_days=3)
+
+    monkeypatch.setattr(config.settings, "few_shot_full_examples", False)
+    sliced_prompt = _build_plan_prompt(inputs)
+    monkeypatch.setattr(config.settings, "few_shot_full_examples", True)
+    full_prompt = _build_plan_prompt(inputs)
+
+    # Le plus long exemple compte plusieurs jours : son dernier jour n'apparait
+    # qu'en mode full (le mode par defaut slice a days[:1]).
+    longest = max(len(e.plan.days) for e in FEW_SHOT_EXAMPLES)
+    assert longest > 1
+    marker = f'"day":{longest}'
+    assert marker in full_prompt.replace(" ", "")
+    assert marker not in sliced_prompt.replace(" ", "")
+    assert len(full_prompt) > len(sliced_prompt)
+
+
 # T1 : tracer bullet. Plan valide au 1er essai -> ComplianceStatus.full.
 
 

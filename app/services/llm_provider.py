@@ -37,11 +37,15 @@ class OllamaProvider(LLMProvider):
         model: str = _OLLAMA_DEFAULT_MODEL,
         timeout: float = _OLLAMA_DEFAULT_TIMEOUT_S,
         num_predict: int | None = _OLLAMA_DEFAULT_NUM_PREDICT,
+        num_ctx: int | None = None,
+        temperature: float | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout
         self._num_predict = num_predict
+        self._num_ctx = num_ctx
+        self._temperature = temperature
 
     async def generate(self, prompt: str, schema: dict[str, Any] | None) -> str:
         payload: dict[str, Any] = {
@@ -51,8 +55,15 @@ class OllamaProvider(LLMProvider):
         }
         if schema is not None:
             payload["format"] = schema
+        options: dict[str, Any] = {}
         if self._num_predict is not None:
-            payload["options"] = {"num_predict": self._num_predict}
+            options["num_predict"] = self._num_predict
+        if self._num_ctx is not None:
+            options["num_ctx"] = self._num_ctx
+        if self._temperature is not None:
+            options["temperature"] = self._temperature
+        if options:
+            payload["options"] = options
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.post(f"{self._base_url}/api/generate", json=payload)
             resp.raise_for_status()
@@ -111,7 +122,12 @@ def get_provider(name: str | None = None) -> LLMProvider:
     """
     backend = (name or settings.default_llm).lower()
     if backend == "ollama":
-        return OllamaProvider(base_url=settings.ollama_host)
+        return OllamaProvider(
+            base_url=settings.ollama_host,
+            model=settings.ollama_model,
+            num_ctx=settings.ollama_num_ctx,
+            temperature=settings.ollama_temperature,
+        )
     if backend == "mistral":
         if not settings.mistral_api_key:
             raise ValueError("MISTRAL_API_KEY manquante alors que LLM_BACKEND=mistral.")

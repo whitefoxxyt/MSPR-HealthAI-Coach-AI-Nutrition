@@ -39,7 +39,6 @@ _OLLAMA_SEMAPHORE = asyncio.Semaphore(2)
 _OLLAMA_TIMEOUT_S = 30.0
 _MAX_ATTEMPTS = 3  # 1 essai initial + 2 retries (flakiness Ollama)
 _RETRY_BACKOFF_S = 0.5  # backoff exponentiel : 0.5s, 1.0s entre retries
-_OLLAMA_MODEL = "gemma3:4b"
 
 _RECO_PROMPT_TEMPLATE = (
     "Tu es un coach nutritionnel. L'utilisateur a les desequilibres suivants "
@@ -281,8 +280,11 @@ async def _call_ollama_generate(prompt: str, json_schema: dict[str, Any] | None)
     """
     provider = OllamaProvider(
         base_url=settings.ollama_host,
+        model=settings.ollama_model,
         timeout=_OLLAMA_TIMEOUT_S,
         num_predict=None,
+        num_ctx=settings.ollama_num_ctx,
+        temperature=settings.ollama_temperature,
     )
     return await provider.generate(prompt, json_schema)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Awaitable, Callable
 from enum import Enum
+from functools import lru_cache
 from typing import Any
 
 from app.config import settings
@@ -20,28 +21,28 @@ from app.services.fallback_loader import load_fallback_plan
 LLMGen = Callable[[str, dict[str, Any]], Awaitable[str]]
 
 
-def _format_few_shot_example(idx: int, example: FewShotExample) -> str:
-    """Formate un exemple en bloc texte : entete + JSON (1er jour) + annotation.
+def _format_few_shot_example(
+    idx: int, example: FewShotExample, full: bool = False
+) -> str:
+    """Formate un exemple en bloc texte : entete + JSON + annotation.
 
-    Slice volontaire a days[:1] : Gemma3:4b sur CPU timeout au-dela de ~2000
-    tokens de prefill. Inclure le 1er jour suffit a transmettre la structure
-    attendue (schema + style) sans exploser le prompt. Les FEW_SHOT_EXAMPLES
-    restent complets (7j/5j/1j) pour les tests et un futur run GPU.
+    full=False : slice volontaire a days[:1], Gemma3:4b sur CPU timeout
+    au-dela de ~2000 tokens de prefill et le 1er jour suffit a transmettre
+    la structure attendue (schema + style). full=True (env
+    FEW_SHOT_FULL_EXAMPLES, infra GPU) : exemples complets 7j/5j/1j.
     """
     verdict = "valide" if example.is_valid else "rejete"
     header = f"Exemple {idx} ({example.label}, {verdict}) :"
-    sliced = example.plan.model_copy(update={"days": example.plan.days[:1]})
-    plan_json = sliced.model_dump_json()
+    plan = (
+        example.plan
+        if full
+        else example.plan.model_copy(update={"days": example.plan.days[:1]})
+    )
+    plan_json = plan.model_dump_json()
     if example.is_valid or not example.rejection_reason:
         return f"{header}\n{plan_json}"
     return f"{header}\n{plan_json}\nMotif du rejet : {example.rejection_reason}"
 
-
-_FEW_SHOT_BLOCK = "\n\n".join(
-    _format_few_shot_example(i + 1, ex) for i, ex in enumerate(FEW_SHOT_EXAMPLES)
-)
-# Echappe les accolades du JSON pour str.format() applique plus bas.
-_FEW_SHOT_BLOCK_ESCAPED = _FEW_SHOT_BLOCK.replace("{", "{{").replace("}", "}}")
 
 _CORE_INSTRUCTION = (
     "genere un plan repas JSON pour {duration_days} jours.\n"
@@ -54,11 +55,21 @@ _CORE_INSTRUCTION = (
     "ingredients (liste), est_budget_eur, prep_time_min. Mets fallback=false."
 )
 
-_PLAN_PROMPT_TEMPLATE = (
-    "Tu es un nutritionniste. Voici 3 exemples de plans valides ou rejetes :\n"
-    f"{_FEW_SHOT_BLOCK_ESCAPED}\n\n"
-    f"Maintenant {_CORE_INSTRUCTION}"
-)
+
+@lru_cache(maxsize=2)
+def _plan_prompt_template(full_examples: bool) -> str:
+    block = "\n\n".join(
+        _format_few_shot_example(i + 1, ex, full_examples)
+        for i, ex in enumerate(FEW_SHOT_EXAMPLES)
+    )
+    # Echappe les accolades du JSON pour str.format() dans _build_plan_prompt.
+    escaped = block.replace("{", "{{").replace("}", "}}")
+    return (
+        "Tu es un nutritionniste. Voici 3 exemples de plans valides ou rejetes :\n"
+        f"{escaped}\n\n"
+        f"Maintenant {_CORE_INSTRUCTION}"
+    )
+
 
 _PLAN_PROMPT_TEMPLATE_NO_FEW_SHOT = (
     f"Tu es un nutritionniste. {_CORE_INSTRUCTION[0].upper()}{_CORE_INSTRUCTION[1:]}"
@@ -216,7 +227,7 @@ def _build_constraint_spec(inputs: PlanInputs) -> ConstraintSpec:
 
 def _build_plan_prompt(inputs: PlanInputs) -> str:
     template = (
-        _PLAN_PROMPT_TEMPLATE
+        _plan_prompt_template(settings.few_shot_full_examples)
         if settings.few_shot_enabled
         else _PLAN_PROMPT_TEMPLATE_NO_FEW_SHOT
     )

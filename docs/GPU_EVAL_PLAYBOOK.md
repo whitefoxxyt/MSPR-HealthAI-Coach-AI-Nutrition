@@ -61,23 +61,11 @@ cd MSPR-HealthAI-Coach-AI-Nutrition
 Le code prod tronque les exemples few-shot a `days[:1]` pour tenir dans le
 budget tokens de Gemma3:4b sur CPU. Sur GPU on garde les exemples complets.
 
-Editer `app/services/decrim_retry_orchestrator.py`, fonction
-`_format_few_shot_example` (autour de la ligne 27) :
-
-```python
-def _format_few_shot_example(idx: int, example: FewShotExample) -> str:
-    verdict = "valide" if example.is_valid else "rejete"
-    header = f"Exemple {idx} ({example.label}, {verdict}) :"
-    plan_json = example.plan.model_dump_json()  # <-- remplace le slicing days[:1]
-    if example.is_valid or not example.rejection_reason:
-        return f"{header}\n{plan_json}"
-    return f"{header}\n{plan_json}\nMotif du rejet : {example.rejection_reason}"
-```
-
-Concretement : supprimer la ligne `sliced = example.plan.model_copy(...)` et
-remplacer `sliced.model_dump_json()` par `example.plan.model_dump_json()`.
-
-Ne pas commiter ce changement. Il est utile uniquement pour ce run GPU.
+Plus aucune modification de code n'est necessaire : le slicing est pilote par
+la variable d'environnement `FEW_SHOT_FULL_EXAMPLES` (settings
+`few_shot_full_examples`, defaut `false`). Elle est activee par defaut dans
+`docker-compose.gpu-eval.yml` et passee explicitement (`-e
+FEW_SHOT_FULL_EXAMPLES=true`) dans les commandes de la section 6.
 
 ## 4. Demarrer la stack via docker-compose.gpu-eval.yml
 
@@ -163,6 +151,7 @@ docker exec mspr-ai-nutrition pip install --quiet matplotlib==3.9.2 datasets==3.
 ```bash
 docker exec \
   -e FEW_SHOT_ENABLED=true \
+  -e FEW_SHOT_FULL_EXAMPLES=true \
   -e MPLBACKEND=Agg \
   -e PYTHONPATH=/app \
   mspr-ai-nutrition \
@@ -207,6 +196,7 @@ racine `docs/` :
 ```bash
 docker exec \
   -e FEW_SHOT_ENABLED=true \
+  -e FEW_SHOT_FULL_EXAMPLES=true \
   -e MPLBACKEND=Agg \
   -e PYTHONPATH=/app \
   mspr-ai-nutrition \
@@ -238,8 +228,9 @@ Deux options pour les renvoyer a Arthur :
 - **Archive** : `tar czf eval-gpu-n30.tar.gz docs/metrics.json docs/metrics.md docs/eval_runs/`,
   envoyer via Slack/email.
 
-Ne pas commiter les modifications faites aux etapes 3 et 4 (slicing few-shot,
-deploy GPU). Si tu utilises l'option PR, ne pas pousser ces deux fichiers.
+Les etapes 3 et 4 ne modifient plus aucun fichier versionne (slicing pilote
+par `FEW_SHOT_FULL_EXAMPLES`, deploy GPU dans `docker-compose.gpu-eval.yml`) :
+rien a exclure de la PR.
 
 ## 8. Verification rapide avant envoi
 

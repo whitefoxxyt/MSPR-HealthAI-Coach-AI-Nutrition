@@ -78,6 +78,54 @@ async def test_ollama_provider_with_schema_sends_format_and_num_predict(
 
 
 @pytest.mark.asyncio
+async def test_ollama_provider_sends_inference_options(
+    mock_ollama: respx.MockRouter,
+) -> None:
+    route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_response("ok")
+    )
+    provider = OllamaProvider(
+        base_url="http://ollama:11434",
+        model="gemma3:12b",
+        num_ctx=8192,
+        temperature=0.2,
+    )
+
+    await provider.generate("question", schema=None)
+
+    body = json.loads(route.calls.last.request.content)
+    assert body["model"] == "gemma3:12b"
+    assert body["options"] == {
+        "num_predict": 2048,
+        "num_ctx": 8192,
+        "temperature": 0.2,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_provider_ollama_wires_settings_inference_options(
+    mock_ollama: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import config
+
+    monkeypatch.setattr(config.settings, "ollama_model", "qwen2.5:3b")
+    monkeypatch.setattr(config.settings, "ollama_num_ctx", 4096)
+    monkeypatch.setattr(config.settings, "ollama_temperature", 0.5)
+    route = mock_ollama.post(re.compile(r".*/api/generate$")).respond(
+        200, json=_ollama_response("ok")
+    )
+
+    provider = get_provider("ollama")
+    await provider.generate("question", schema=None)
+
+    body = json.loads(route.calls.last.request.content)
+    assert body["model"] == "qwen2.5:3b"
+    assert body["options"]["num_ctx"] == 4096
+    assert body["options"]["temperature"] == 0.5
+
+
+@pytest.mark.asyncio
 async def test_ollama_provider_propagates_http_error(
     mock_ollama: respx.MockRouter,
 ) -> None:

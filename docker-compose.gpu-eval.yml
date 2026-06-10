@@ -16,7 +16,8 @@
 # Eval LLM (n=30, with / without few-shot) :
 #   docker exec mspr-ai-nutrition pip install --quiet matplotlib==3.9.2 datasets==3.2.0
 #
-#   docker exec -e FEW_SHOT_ENABLED=true -e MPLBACKEND=Agg -e PYTHONPATH=/app \
+#   docker exec -e FEW_SHOT_ENABLED=true -e FEW_SHOT_FULL_EXAMPLES=true \
+#     -e MPLBACKEND=Agg -e PYTHONPATH=/app \
 #     mspr-ai-nutrition python scripts/eval_metrics.py llm \
 #       --n-generations 30 --n-constraint-plans 30 --seed 42 \
 #       --output-dir docs/eval_runs/with_fewshot
@@ -82,6 +83,9 @@ services:
       DB_USER: healthai_user
       DB_PASSWORD: password
       OLLAMA_HOST: http://ollama:11434
+      # Exemples few-shot complets (7j/5j/1j) : viable sur GPU uniquement,
+      # cf. docs/GPU_EVAL_PLAYBOOK.md section 3.
+      FEW_SHOT_FULL_EXAMPLES: "true"
       PYTHONPATH: /app
     ports:
       - "8001:8001"
