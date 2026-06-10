@@ -75,17 +75,32 @@ def test_fuzzy_match_returns_partial(db_session: Session) -> None:
     assert result["calories"] == 350.0
 
 
-def test_total_miss_returns_none(db_session: Session) -> None:
-    # Aucun aliment ne contient ni "grilled" ni "salmon".
+def test_db_takes_precedence_over_static(db_session: Session) -> None:
+    # Une entree ETL existe : le referentiel statique ne doit pas la masquer.
+    _insert(db_session, food_name="Grilled Salmon", calories=412.0)
+
+    result = lookup_nutrition("grilled_salmon", db_session)
+
+    assert result is not None
+    assert result["calories"] == 412.0
+    assert "source" not in result
+
+
+def test_food101_label_falls_back_to_static(db_session: Session) -> None:
+    # Aucune entree ETL : le label Food-101 est servi par le referentiel statique.
     _insert(db_session, food_name="Apple Pie")
     _insert(db_session, food_name="Caesar Salad")
 
     result = lookup_nutrition("grilled_salmon", db_session)
 
-    assert result is None
+    assert result is not None
+    assert result["source"] == "static"
+    assert result["food_name"] == "Grilled salmon"
+    assert result["calories"] > 0
 
 
-def test_empty_table_returns_none(db_session: Session) -> None:
-    result = lookup_nutrition("grilled_salmon", db_session)
+def test_unknown_label_returns_none(db_session: Session) -> None:
+    # Label hors Food-101 et hors BDD : aucun repli possible.
+    result = lookup_nutrition("dragon_fruit_smoothie", db_session)
 
     assert result is None

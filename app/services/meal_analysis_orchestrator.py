@@ -88,11 +88,21 @@ async def analyze_meal(
             status_code=422, detail="Aucun aliment detecte avec un score suffisant."
         )
 
-    # 2. Lookup nutrition pour chaque aliment detecte.
-    detected_foods = [
-        {"label": label, "confidence": score, "nutrition": lookup_nutrition(label, db)}
-        for label, score in predictions
-    ]
+    # 2. Lookup nutrition pour chaque aliment detecte. Le marqueur source=static
+    # (referentiel Food-101 embarque) est retire de la reponse mais alimente un
+    # warning de transparence sur l'origine des valeurs.
+    detected_foods = []
+    estimated_labels: list[str] = []
+    missing_labels: list[str] = []
+    for label, score in predictions:
+        nutrition = lookup_nutrition(label, db)
+        if nutrition is None:
+            missing_labels.append(label)
+        elif nutrition.pop("source", None) == "static":
+            estimated_labels.append(label)
+        detected_foods.append(
+            {"label": label, "confidence": score, "nutrition": nutrition}
+        )
 
     # 3. Tailles de portion PNNS + macros recalculees pour chaque aliment.
     serving_sizes_by_food = [
@@ -111,7 +121,7 @@ async def analyze_meal(
     health_goal = _resolve_health_goal(goal)
     user_profile = build_user_profile(goal)
 
-    warnings = _build_warnings(meal_type)
+    warnings = _build_warnings(meal_type, estimated_labels, missing_labels)
 
     # Thumbnail data URL pour affichage dans l'historique. Calcul une fois,
     # reutilisee dans les deux branches de persistance.
@@ -325,10 +335,24 @@ def _persist_analysis(
 _MEAL_TYPE_FALLBACK_WARNING = "meal_type non specifie, fallback TDEE/4"
 
 
-def _build_warnings(meal_type: MealType | None) -> list[str]:
+def _build_warnings(
+    meal_type: MealType | None,
+    estimated_labels: list[str] | None = None,
+    missing_labels: list[str] | None = None,
+) -> list[str]:
+    warnings: list[str] = []
     if meal_type is None:
-        return [_MEAL_TYPE_FALLBACK_WARNING]
-    return []
+        warnings.append(_MEAL_TYPE_FALLBACK_WARNING)
+    if estimated_labels:
+        warnings.append(
+            "Valeurs nutritionnelles estimees (referentiel generique) pour : "
+            + ", ".join(estimated_labels)
+        )
+    if missing_labels:
+        warnings.append(
+            "Valeurs nutritionnelles indisponibles pour : " + ", ".join(missing_labels)
+        )
+    return warnings
 
 
 def _serving_sizes_for(

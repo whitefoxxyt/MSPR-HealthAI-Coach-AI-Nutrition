@@ -3,6 +3,8 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.data.food101_macros import static_nutrition_for
+
 
 def _label_to_keywords(label: str) -> list[str]:
     """Convertit un label Food-101 (ex: 'grilled_salmon') en mots-clés de recherche."""
@@ -21,6 +23,7 @@ def lookup_nutrition(
     Stratégie :
     1. Correspondance exacte (insensible à la casse) après normalisation des underscores.
     2. Correspondance partielle : chaque mot-clé doit apparaître dans food_name.
+    3. Repli sur le référentiel statique Food-101 (marqué source=static).
 
     Retourne un dict avec les macros, ou None si aucune entrée trouvée.
     """
@@ -56,7 +59,9 @@ def lookup_nutrition(
             ).fetchone()
 
     if row is None:
-        return None
+        # 3. Repli statique : la moitie des labels Food-101 n'a pas d'entree ETL,
+        # ce referentiel garantit des macros pour chaque aliment detecte.
+        return static_nutrition_for(label)
 
     return {
         "food_name": row.food_name,
