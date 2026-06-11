@@ -1,44 +1,103 @@
 {
-  "generated_at": 1779095322,
+  "generated_at": 1781124632,
   "llm": {
-    "naive": {
-      "by_constraint": {
-        "allergies": 1.0,
-        "budget": 0.0,
-        "diet": 0.8
+    "gemma_n30": {
+      "backend": "ollama",
+      "naive": {
+        "by_constraint": {
+          "allergies": 0.7666666666666667,
+          "budget": 0.0,
+          "diet": 0.6666666666666666
+        },
+        "constraint_n_plans": 30,
+        "constraint_satisfaction": 0.0,
+        "fallback_rate": 0.0,
+        "json_validity_rate": 1.0,
+        "latencies_ms_raw": [
+          48399.26452600048,
+          45332.48333800293,
+          44025.45104200544,
+          39474.192189998575,
+          42068.55749999522,
+          42213.420361003955,
+          46012.602074988536,
+          44297.90710398811,
+          45852.110810010345,
+          45578.0769319972,
+          46212.78883100604,
+          45092.236644006334,
+          45562.605426996015,
+          45664.780089995475,
+          39648.429155000485,
+          44523.97491100419,
+          44210.19188700302,
+          41257.25119300478,
+          42896.662593004294,
+          40594.444510003086,
+          44579.6286570112,
+          40738.22262100293,
+          42842.52776300127,
+          42457.745306004654,
+          39475.09586800879,
+          46045.81426999357,
+          45282.54995300085,
+          45500.519349996466,
+          44505.99237901042,
+          42917.44445399672,
+          44093.74604599725,
+          43086.42585101188,
+          44111.11535401142,
+          43681.13698399975,
+          48604.78892699757,
+          42014.45340599457,
+          41703.35889600392,
+          42584.63068600395,
+          44857.70184001012,
+          44785.282730008475,
+          41252.693280999665,
+          45099.279311994906,
+          45060.75559799501,
+          46032.79474801093,
+          40766.40669199696,
+          44658.70999400795,
+          46780.24074000132,
+          41162.94009498961,
+          44020.16730100149,
+          46126.975099992706,
+          47034.80860400305,
+          42055.277348990785,
+          42873.55461801053,
+          45664.94735398737,
+          46837.47990199481,
+          41885.67569499719,
+          43929.30783699558,
+          46971.187766001094,
+          43806.574424990686,
+          43768.921148002846
+        ],
+        "latency_distribution_png": "docs/eval_runs/without_fewshot/llm_latency_distribution.png",
+        "latency_max_ms": 48604.78892699757,
+        "latency_p50_ms": 44111.11535401142,
+        "latency_p95_ms": 46971.187766001094,
+        "n_generations": 60
       },
-      "constraint_n_plans": 5,
-      "constraint_satisfaction": 0.0,
-      "fallback_rate": 0.0,
-      "hitl": {
-        "mean_coherence": 0.0,
-        "mean_nutrition": 0.0,
-        "mean_originalite": 0.0,
-        "n_ratings": 0
-      },
-      "json_validity_rate": 1.0,
-      "latency_distribution_png": "docs/eval_runs/without_fewshot/llm_latency_distribution.png",
-      "latency_max_ms": 95964.70792800028,
-      "latency_p50_ms": 86100.95206300047,
-      "latency_p95_ms": 95964.70792800028,
-      "n_generations": 8
-    },
-    "pipeline": {
-      "abandoned_503": 0.4,
-      "by_constraint": {
-        "allergies": 1.0,
-        "budget": 0.3333333333333333,
-        "diet": 1.0
-      },
-      "constraint_satisfaction": 0.2,
-      "latency_p50_ms": 249906.96376899997,
-      "latency_p95_ms": 296618.6850459999,
-      "n_generations": 5,
-      "partial_compliance": 0.4,
-      "retry_count_distribution": {
-        "3": 5
-      },
-      "static_fallback": 0.0
+      "pipeline": {
+        "abandoned_503": 0.3,
+        "by_constraint": {
+          "allergies": 1.0,
+          "budget": 0.0,
+          "diet": 1.0
+        },
+        "constraint_satisfaction": 0.0,
+        "latency_p50_ms": 135577.00921098876,
+        "latency_p95_ms": 178891.49130501028,
+        "n_generations": 30,
+        "partial_compliance": 0.7,
+        "retry_count_distribution": {
+          "3": 30
+        },
+        "static_fallback": 0.0
+      }
     }
   }
 }

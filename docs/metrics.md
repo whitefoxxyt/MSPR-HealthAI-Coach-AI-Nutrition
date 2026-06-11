@@ -95,6 +95,22 @@ Top classes (precision / rappel / F1 / support) :
 
 ## LLM : comparaison multi-backend
 
+### Comparaison Gemma3:4b local vs Mistral Small managed
+
+Gemma3:4b evalue N=30 (seed 42) le 2026-06-10 sur GPU : serveur Unraid Zespri, Quadro P1000 4 Go, Ollama 100 % GPU (`num_gpu=99`, `num_ctx=8192`), few-shot complet 7j/5j/1j (`FEW_SHOT_FULL_EXAMPLES=true`). Mistral N=20, meme seed.
+
+| Metrique | Gemma3:4b local | Mistral Small managed |
+|---|---|---|
+| compliance_status=full | 0.3333 | 0.6500 |
+| allergy compliance rate | 1.0000 | 1.0000 |
+| diet compliance rate | 1.0000 | 1.0000 |
+| JSON validity rate | 1.0000 | 1.0000 |
+| latence p50 (pipeline) | 108597 ms | 2983 ms |
+| latence p95 (pipeline) | 153655 ms | 9744 ms |
+| retry count moyen | 2.40 | 1.40 |
+
+L'ablation few-shot (N=30 par condition, details dans `docs/eval_runs/{with,without}_fewshot/`) montre que les exemples few-shot debloquent la conformite budget de Gemma : sans few-shot, 0.00 de plans full (budget 0.00, 30/30 generations epuisent les 3 retries) ; avec few-shot complet, 0.33 de plans full et 0.45 a 0.48 de respect budget, avec un p50 pipeline plus bas (95 a 109 s contre 136 s).
+
 ### Mistral Small managed (backend par defaut)
 
 Pipeline complet (validator DeCRIM-light + retry + fallback statique) sur le seed 42, allergies / regime / budget tires aleatoirement parmi le pool de contraintes de l'eval.
@@ -119,7 +135,7 @@ Le N=100 confirme l'ordre de grandeur du N=20 : la dispersion sur 100 generation
 
 Gemma reste branche dans `LLMProvider` et adresse trois cas hors UX interactive :
 
-- **Eval differee sur GPU** : un host GPU (cf. `GPU_EVAL_PLAYBOOK.md`) peut produire les chiffres comparatifs hors du chemin temps reel. Non disponible pour la soutenance.
+- **Eval differee sur GPU** : un host GPU (cf. `GPU_EVAL_PLAYBOOK.md`) peut produire les chiffres comparatifs hors du chemin temps reel.
 - **Mode offline / on-premise** : deploiement sans `MISTRAL_API_KEY`, par exemple en environnement hospitalier qui refuse l'exfiltration de donnees sante.
 - **Backend de fallback** : si Mistral renvoie 5xx / 429 / timeout, la `FallbackChain` route sur Ollama avant le static_fallback, et taggue le plan avec `compliance_warning` explicitant la bascule.
 
@@ -143,7 +159,7 @@ DeCRIM-light gagne +38 points sur la conformite globale, au prix de +4 s sur le 
 - **Limitations dataset Food-101** : 101 classes academiques, photos cadrees, fond neutre. Tres different des photos prises au telephone (eclairage, angle, plat composite).
 - **Biais du modele** : fine-tune sur Food-101 -> classes hors-distribution (ex : plats francais traditionnels, repas ethniques specifiques) sont systematiquement misclassifies vers la classe la plus proche visuellement.
 - **Cas d'echec frequents** : plats mixtes (assiette avec plusieurs aliments), decoupes inhabituelles, photos en faible luminosite, gros plans non cadres.
-- **LLM** : la latence Mistral p50 ~4 s et p95 ~10 s sont compatibles d'une UX interactive. Le fallback statique garantit une UX correcte hors disponibilite des deux providers. Les violations de contraintes proviennent essentiellement du budget (relache via `partial_budget` quand la generation ne tient pas la cible) ; allergies et diete passent a 1.00 grace au validator DeCRIM-light.
+- **LLM** : la latence p95 sur CPU reste contraignante ; le fallback statique garantit une UX correcte hors disponibilite Ollama. Les violations de contraintes proviennent souvent du regime alimentaire (vegan/sans gluten moins bien respectes que les allergies).
 
 ### Mistral Small managed vs Gemma3:4b local
 
